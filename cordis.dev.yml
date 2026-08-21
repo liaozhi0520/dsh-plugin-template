@@ -1,0 +1,24 @@
+# 开发 overlay：重新启用并配置共享 HMR。
+# 用法（启动 dsh web 时叠加）：
+#   pnpm dsh web --patch C:/agentProjects/dsh-plugin-template/cordis.dev.yml
+#
+# 使用前：把下面 root 的绝对路径改成本模板在你机器上的实际位置（指向 lib/，
+# 即 `pnpm dev` 持续重写的构建产物目录——HMR 监听的就是产物文件）。
+
+# 重新启用共享 HMR 插件。
+# dsh-base 已挂载 @deepseek-ai/cordis-plugin-hmr（root: ['.']），
+# 但 dsh-web-app 又把它禁用了（disabled: true，见 harness 仓库
+# packages/bundle/web-app/cordis.patch.yml），所以这里按 id 覆盖该行。
+# patch 会整行替换 config，因此 root 需要完整重述。
+#
+# ⚠️ 必须覆盖 ignored 默认值：hmr 用 picomatch 匹配 path.relative 的结果，
+# Windows 下返回反斜杠路径，'..' 段会被转义成语义不同的串，导致默认的
+# '**/.*' 规则误杀所有 base 目录之外的监听 root（静默忽略、无任何日志）。
+# lib/ 下没有需要排除的东西，直接置空。
+- id: hmr
+  disabled: false
+  config:
+    root:
+      - 'C:/agentProjects/dsh-plugin-template/lib'
+    ignored: []
+    debounce: 100

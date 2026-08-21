@@ -1,0 +1,8 @@
+# Bundle 层：profile 通过 `dsh plugin add` 安装本包时应用，
+# 按包名引用插件入口（解析到 package.json 的 exports['.']）。
+- insert:
+    - id: dsh-plugin-template
+      name: dsh-plugin-template
+      # 插件的默认 config 写在这里（会被 schema 校验并填充默认值）：
+      # config:
+      #   greeting: 'Hi'
