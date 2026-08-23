@@ -59,27 +59,41 @@ dsh web --patch <本模板目录>/cordis.dev.yml --no-open
 
 harness 正处在 0.1 rc 快速迭代期，版本策略要点如下。
 
-**先澄清影响面**：`@deepseek-ai/*` 的版本号只影响**开发期**（本地 typecheck/build 的类型与 API 保真度）；运行时这些包全部由 harness 安装环境兜底解析提供，插件实际跑的是 harness 自带的版本。所以"版本追不上"的代价是开发时类型对不上新版 API，不会让运行时用旧库。
+**peer 与 dev 各司其职，必须同一下限**：
+
+- `devDependencies`：开发期编译/类型所用的版本——决定你的代码能用到哪些 API；
+- `peerDependencies`：运行时最低兼容声明。它**不强制** harness 升级（profile 是 `autoInstallPeers: false` + 兜底解析，运行时永远用 harness 自带的版本），但如果代码用到了新 API，旧 harness 上安装插件会得到 unmet peer 警告，而不是静默运行可能崩溃的代码；
+- 两者保持同一下限（官方规则：every peer has a matching development range）。
 
 **版本范围的语义**（实测 `@deepseek-ai/dsh-client-runtime`）：
 
 | 写法 | 解析结果 | 说明 |
 |---|---|---|
-| `^0.1.1-rc.1` | 当前线最新（如 0.1.1-rc.2） | ✅ 在本线内追踪 rc 递增，模板默认写法 |
+| `^0.1.1-rc.2` | 当前线最新 | ✅ 下限 = 已验证版本，允许同线 rc 递增，模板默认写法 |
 | `^0.1.0-rc.7` | 0.1.0-rc.8 | ⚠️ 锁死在 0.1.0 线，追不到 0.1.1 线 |
-| `0.1.1-rc.1`（无 `^`） | 永不移动 | ❌ `pnpm add pkg@版本` 默认写死，注意补 `^` |
+| `0.1.1-rc.2`（无 `^`） | 永不移动 | ❌ `pnpm add pkg@版本` 默认写死，注意补 `^` |
 | `latest` / `*` | 0.0.1-rc.1（老线！） | ❌ 陷阱：dist-tag 停在这条老线上，追最新反而拿到最旧 |
 
-**追新的操作**：
+**追新的流程（推荐：改下限 + install）**：
 
 ```sh
-pnpm update            # 锁文件范围内重解析到最新（rc 线内递增）
-pnpm update -L         # 忽略锁文件，强制取范围内最新
+# ① 查最新版本（dist-tag 不可信，按范围查）
+pnpm view "@deepseek-ai/dsh-tools@^0.1.1-rc.1" version     # → 0.1.1-rc.3
+
+# ② 把 package.json 里 peer 与 dev 的 @deepseek-ai/dsh-* 下限同时抬到新版本
+#    （dev 决定编译所用 API；peer 声明运行时最低兼容，两者同一下限）
+
+# ③ install：下限超过 lockfile 时强制重解析，caret 写法保留
+pnpm install
+
+# ④ typecheck 修 API 破坏，绿了之后 build
+pnpm typecheck && pnpm build
 ```
 
-- **跨线升级**（harness 出 0.2.x）：没有自动机制——rc 期 minor 变化常带破坏性变更，需要手动把范围改成 `^0.2.0-rc.x`，然后跑 `pnpm typecheck` 按报错修 API 变化。版本号即兼容性文档，别让范围偷偷越线。
-- **锁文件**：仓库提交的 `pnpm-lock.yaml` 会把安装钉在写锁那一刻。想"克隆即最新"，可从模板里移除锁文件（首次安装现场解析）；想可复现，保留它并养成 `pnpm update` 习惯。
-- **追新的代价**：rc 线上 `pnpm update` 后 build 可能红（上游破坏性变更），属预期，按报错修即可。
+- **为什么不用 `pnpm update`**：它会重解析范围到最新，但会把 rc 包的范围改写成精确版本（实测 `^0.1.1-rc.1` → `0.1.1-rc.2`），且不碰 peer 侧——想保持范围写法还得追完再补 `^`。改下限 + install 则永远保留 caret，peer/dev 一起动，版本真相始终由你声明。
+- **跨线升级**（harness 出 0.2.x）：同样改下限到 `^0.2.0-rc.x`（peer 与 dev 一起），跑 typecheck 按报错修 API 变化。版本号即兼容性文档，别让范围偷偷越线。
+- **锁文件**：仓库提交的 `pnpm-lock.yaml` 会把安装钉在写锁那一刻。想"克隆即最新"，可从仓库里移除锁文件（首次安装现场解析）；想可复现，保留它并按上面流程主动抬下限。
+- **追新的代价**：rc 线上抬下限后 typecheck 可能红（上游破坏性变更），属预期，按报错修即可。
 
 ## 发布到 npm
 
