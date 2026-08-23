@@ -2,10 +2,11 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件模板：**双端（host + client）HMR 开发**，开发完成后可**直接发布到 npm** 或**推到 GitHub** 供用户安装。
 
-模板自带两个可删改的示例功能，分别覆盖两端：
+模板自带三个可删改的示例功能，覆盖两端与端间调用：
 
 - **Host half**（`src/index.ts`）：注册模型可调用的 `greet` 工具，演示 `inject` / `Config` schema / 事件监听；
-- **Client half**（`src/client/index.tsx`）：在 Web 设置页注册一个"HMR 演示"面板，演示 slot 组合与浏览器原地热替换。
+- **Client half**（`src/client/index.ts`）：在 Web 设置页注册一个"HMR 演示"面板，演示 slot 组合、locale 词典（zh/en 双语键集）、CSS Modules 样式与浏览器原地热替换；
+- **Host↔Client 调用**（`src/remote.ts` + `src/client/api.ts`）：面板上的"调用 host"按钮经 Typert Gateway 调用 host 半的 `template/ping` 端点，演示第三方插件的远程调用形态（为什么是手写描述符而非官方 `@Remote` 装饰器，见 `src/remote.ts` 头注释）。
 
 ## 使用本模板
 
@@ -16,7 +17,7 @@
    | `package.json` 的 `name` | 你的包名（如 `@you/dsh-foo`） |
    | `cordis.patch.yml` 的 `id` / `name` | 同上 |
    | `tsdown.config.ts` banner 里的 `id` | 同上 |
-   | `src/client/index.tsx` 的 slot `id`、label | 你的 UI 标识 |
+   | `src/client/index.ts` 的 slot `id`、label | 你的 UI 标识 |
    | `cordis.dev.yml` 的 `root` 绝对路径 | 本模板在你机器上的 `lib/` 路径 |
    | `LICENSE` 版权行 | 你的名字 |
 
@@ -54,6 +55,32 @@ dsh web --patch <本模板目录>/cordis.dev.yml --no-open
 
 > **安装版 dsh 注意**：cordis-plugin-hmr 需要读 Node 内部模块加载器。若启动报 `--expose-internals is required for HMR`，用 `NODE_OPTIONS=--expose-internals dsh web ...` 启动即可（从源码运行的 `pnpm dsh` 自带 tsx，无此问题）。
 
+## 依赖版本与追新
+
+harness 正处在 0.1 rc 快速迭代期，版本策略要点如下。
+
+**先澄清影响面**：`@deepseek-ai/*` 的版本号只影响**开发期**（本地 typecheck/build 的类型与 API 保真度）；运行时这些包全部由 harness 安装环境兜底解析提供，插件实际跑的是 harness 自带的版本。所以"版本追不上"的代价是开发时类型对不上新版 API，不会让运行时用旧库。
+
+**版本范围的语义**（实测 `@deepseek-ai/dsh-client-runtime`）：
+
+| 写法 | 解析结果 | 说明 |
+|---|---|---|
+| `^0.1.1-rc.1` | 当前线最新（如 0.1.1-rc.2） | ✅ 在本线内追踪 rc 递增，模板默认写法 |
+| `^0.1.0-rc.7` | 0.1.0-rc.8 | ⚠️ 锁死在 0.1.0 线，追不到 0.1.1 线 |
+| `0.1.1-rc.1`（无 `^`） | 永不移动 | ❌ `pnpm add pkg@版本` 默认写死，注意补 `^` |
+| `latest` / `*` | 0.0.1-rc.1（老线！） | ❌ 陷阱：dist-tag 停在这条老线上，追最新反而拿到最旧 |
+
+**追新的操作**：
+
+```sh
+pnpm update            # 锁文件范围内重解析到最新（rc 线内递增）
+pnpm update -L         # 忽略锁文件，强制取范围内最新
+```
+
+- **跨线升级**（harness 出 0.2.x）：没有自动机制——rc 期 minor 变化常带破坏性变更，需要手动把范围改成 `^0.2.0-rc.x`，然后跑 `pnpm typecheck` 按报错修 API 变化。版本号即兼容性文档，别让范围偷偷越线。
+- **锁文件**：仓库提交的 `pnpm-lock.yaml` 会把安装钉在写锁那一刻。想"克隆即最新"，可从模板里移除锁文件（首次安装现场解析）；想可复现，保留它并养成 `pnpm update` 习惯。
+- **追新的代价**：rc 线上 `pnpm update` 后 build 可能红（上游破坏性变更），属预期，按报错修即可。
+
 ## 发布到 npm
 
 ```sh
@@ -61,7 +88,7 @@ npm login          # 首次
 pnpm publish       # prepack 会自动完成构建
 ```
 
-`files` 白名单只带运行必需的产物（`lib/index.js`、`lib/client.js`、`cordis.patch.yml`），发布前建议 `pnpm pack` 检查内容。用户安装：
+`files` 白名单只带运行必需的产物（`lib/index.js`、`lib/invariant.js`、`lib/client.js`、`cordis.patch.yml`），发布前建议 `pnpm pack` 检查内容。用户安装：
 
 ```sh
 dsh plugin --profile web add dsh-plugin-template
@@ -103,13 +130,20 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ## 文件清单
 
 ```
-├── src/index.ts          # host half 入口（greet 工具示例）
-├── src/client/index.tsx  # client half 入口（settings.section 面板示例）
-├── scripts/dev.mjs       # pnpm dev：并行两个构建监视器
-├── tsdown.config.ts      # client bundle 构建（CJS 工厂 + 基线外部化）
-├── tsconfig.json         # 全量类型检查（pnpm typecheck）
-├── tsconfig.build.json   # host 半构建（lib/index.js）
-├── cordis.patch.yml      # bundle 层：安装时插入插件行
-├── cordis.dev.yml        # 开发 overlay：重启用 HMR 并监听 lib/
-└── package.json          # dsh.bundle + dsh.client 双清单，prepare/prepack 构建
+├── src/index.ts                      # host half 入口（greet 工具示例 + Typert 端点注册）
+├── src/remote.ts                     # host 半 Typert 远程端点示例（template/ping，第三方安全形态）
+├── src/invariant.ts                  # 官方 invariant 伴随件（每包必有）
+├── src/css-modules.d.ts              # CSS Modules 导入声明（*.module.css）
+├── src/client/index.ts               # client half 入口（词典/样式/槽位注册组装，无 JSX）
+├── src/client/locales.ts             # zh/en 词典（所有 UI 文案走 locale key）
+├── src/client/api.ts                 # 浏览器 → host 的 RPC 调用（ctx.connection.rpc）
+├── src/client/TemplateSection.tsx    # 演示组件（settings.section 面板）
+├── src/client/TemplateSection.module.css  # 演示样式（CSS Modules + --dsw 设计令牌）
+├── scripts/dev.mjs                   # pnpm dev：并行两个构建监视器
+├── tsdown.config.ts                  # client bundle 构建（CJS 工厂 + 基线外部化 + CSS Modules 内联）
+├── tsconfig.json                     # 全量类型检查（pnpm typecheck）
+├── tsconfig.build.json               # host 半构建（lib/index.js + lib/invariant.js）
+├── cordis.patch.yml                  # bundle 层：安装时插入插件行
+├── cordis.dev.yml                    # 开发 overlay：重启用 HMR 并监听 lib/
+└── package.json                      # dsh.bundle + dsh.client 双清单，prepare/prepack 构建
 ```

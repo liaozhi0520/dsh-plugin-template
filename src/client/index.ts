@@ -1,0 +1,77 @@
+/**
+ * dsh-plugin-template, browser half: registers a demo settings section so the
+ * client-bundle HMR chain is visible end to end — edit sources, the local
+ * `tsdown --watch` rewrites lib/client.js, the host's client-hmr stat poll
+ * broadcasts the rebuild over SSE, and the browser swaps this plugin's fiber
+ * in place without a page reload.
+ *
+ * 官方结构约定（packages/client/AGENTS.md）：入口不含 JSX（组件各自成文件）、
+ * 无 default 导出、只导出 cordis 加载所需（name/inject/apply）；
+ * 文案走 locale 词典、样式走 CSS Modules、组件数据走四份 props shares。
+ */
+import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+// Type-only: ctx.locale service augmentation (LocaleRuntime) + common namespace merge.
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import { DEMO_NS, en, zh, type TemplateDemoKey } from './locales'
+import { pingHost } from './api'
+import { TemplateSection } from './TemplateSection'
+import { cssText } from './TemplateSection.module.css'
+
+export const name = 'dsh-plugin-template'
+export const inject = ['slots', 'locale', 'connection']
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** The demo panel's copy. */
+    'template.demo': TemplateDemoKey
+  }
+}
+
+export function apply(ctx: ClientContext): void {
+  console.log('[dsh-plugin-template] client half loaded (v2)')
+
+  // 注册双语词典（zh/en 键集一致，注册即校验）；ctx.effect 让词典随 HMR 卸载自动撤下。
+  ctx.effect(() => ctx.locale.register(DEMO_NS, { zh, en }), 'dsh-plugin-template: demo dictionaries')
+
+  // 面板样式：构建期 css-modules-inline 插件把 TemplateSection.module.css 编译成
+  // 文本内联进 bundle；这里注入 <style> 并把生命周期挂到本 fiber（HMR 卸载即移除，
+  // 重载以新 CSS 重新注入，不残留旧样式）。
+  ctx.effect(() => {
+    const tag = document.createElement('style')
+    tag.dataset.plugin = name
+    tag.textContent = cssText
+    document.head.appendChild(tag)
+    return () => tag.remove()
+  }, 'dsh-plugin-template: demo styles')
+
+  // 列表 label 支持 thunk：locale 切换时重读，无需重注册。
+  const t = ctx.locale.bind(DEMO_NS)
+
+  // 通用 RPC 通道（连接层提供）：浏览器 → host 的 template/ping。
+  // 官方未给 client 侧 Context 增补 connection 属性，get + 类型断言是收敛的取法。
+  const connection = ctx.get('connection') as ConnectionHandle
+
+  // settings.section 由设置域在运行时声明；slots.inject 等声明出现后注册，
+  // 声明坍缩时自动撤下，重新声明时再注册。locale 声明让框架给组件注入 `t`，
+  // inject 工厂把演示数据面注入组件 props。
+  ctx.slots.inject('settings.section', () =>
+    ctx.slots.register(
+      {
+        name: 'settings.section',
+        id: 'dsh-plugin-template',
+        order: 100,
+        label: () => t('nav'),
+        locale: DEMO_NS,
+        inject: () => ({
+          demo: {
+            ping: (text) => pingHost(connection.rpc, text),
+          },
+        }),
+      },
+      TemplateSection,
+    ),
+  )
+}
