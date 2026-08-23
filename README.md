@@ -65,11 +65,11 @@ harness 处于 0.1 rc 快速迭代期，要点：
 **追新流程**：
 
 ```sh
-# ① 查最新：pnpm view "@deepseek-ai/dsh-tools@^0.1.1-rc.1" version
-# ② 把 package.json 里 peer 与 dev 的 @deepseek-ai/dsh-* 下限同时抬到新版本
-# ③ pnpm install        # 下限超过 lockfile 时强制重解析，^ 保留
-# ④ pnpm typecheck && pnpm build   # 红 = 上游破坏性变更，按报错修
+pnpm bump:deps                      # ① 查最新 ② 抬 peer/dev 下限 ③ pnpm install
+pnpm typecheck && pnpm build        # 红 = 上游破坏性变更，按报错修
 ```
+
+脚本 `scripts/bump-deps.mjs` 只抬当前 minor 线内的最新 rc（跨线 0.2.x 是破坏性变更，需手动改下限）。
 
 - 不用 `pnpm update`：它会剥掉 rc 包的 `^`（实测），且不碰 peer 侧。
 - 跨线升级（0.2.x）：同样抬下限到 `^0.2.0-rc.x`，peer/dev 一起。

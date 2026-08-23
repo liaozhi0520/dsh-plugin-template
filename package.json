@@ -43,6 +43,7 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "bump:deps": "node scripts/bump-deps.mjs",
     "build": "tsc -p tsconfig.build.json && tsdown",
     "typecheck": "tsc --noEmit",
     "prepare": "pnpm run build",
