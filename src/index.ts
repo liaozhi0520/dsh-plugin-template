@@ -7,7 +7,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { PING_DESCRIPTOR, TemplateRemote } from './remote.js'
 import { DISABLED_GLOBAL } from './shared/disabled-flag.js'
-import { assertHarnessSupported } from './version-gate.js'
+import { assertHarnessSupported, MAX_HARNESS_VERSION, MIN_HARNESS_VERSION } from './version-gate.js'
 
 export const name = 'dsh-plugin-template'
 export const inject = ['tools', 'typert']
@@ -42,7 +42,7 @@ export function apply(ctx: Context, config: Config) {
     // 撤销监听，注入表每次 index 请求现收现渲（webserver
     // collectIndexInjections），无持久状态、无残留。
     ctx.on('webserver/index-inject', (table) => {
-      table.push({ kind: 'global', name: DISABLED_GLOBAL, value: { reason } })
+      table.push({ kind: 'global', name: DISABLED_GLOBAL, value: { reason, min: MIN_HARNESS_VERSION, max: MAX_HARNESS_VERSION } })
     })
     return
   }

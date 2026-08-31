@@ -61,8 +61,8 @@ dsh web --patch <本模板目录>/cordis.dev.yml --no-open
 harness 处于 0.1 rc 快速迭代期，要点：
 
 - **peer 与 dev 同一下限**：dev = 编译所用版本，peer = 运行时最低兼容声明（不强制 harness 升级，但旧环境装插件会得到 unmet peer 警告）。官方规则：every peer has a matching development range。
-- **范围写法**：用 `^0.1.1-rc.x`（下限 = 已验证版本）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。
-- **harness 版本门禁**：模板自带 `src/version-gate.ts`，只支持 harness `<= MAX_HARNESS_VERSION`（随 `bump:deps` 验证后上调）。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点解析 `@deepseek-ai/dsh-tools/package.json` 的已安装版本（与 harness 同版本发布；**不能**以插件自身为锚点——devDependencies 里的旧版开发副本会让解析永远命中插件自己的 node_modules，门禁静默失效）。超出上限默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
+- **范围写法**：用 `^0.1.2-alpha.x`（下限 = 已验证版本）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。
+- **harness 版本门禁**：模板自带 `src/version-gate.ts`，要求 harness 版本落在 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]` 窗口内（MIN = 代码实际使用的 API 面要求的最低版本，与 peer 下限对应；MAX = 已验证兼容的最新版本，随 `bump:deps` 验证后上调）。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点解析 `@deepseek-ai/dsh-tools/package.json` 的已安装版本（与 harness 同版本发布；**不能**以插件自身为锚点——devDependencies 里的旧版开发副本会让解析永远命中插件自己的 node_modules，门禁静默失效）。落在窗口外默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持版本窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
 
 **追新流程**：
 

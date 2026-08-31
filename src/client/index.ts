@@ -9,7 +9,10 @@
  * 无 default 导出、只导出 cordis 加载所需（name/inject/apply）；
  * 文案走 locale 词典、样式走 CSS Modules、组件数据走四份 props shares。
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+// Type-only: client 侧 Context（alpha.2 起 dsh-client-runtime 移除，按官方插件惯例用 cordis Context）。
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// Type-only: ctx.slots 服务增强（alpha.2 起 SlotRegistry 归属 ui-renderer）。
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: ctx.locale service augmentation (LocaleRuntime) + common namespace merge.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -18,8 +21,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { DEMO_NS, en, zh, type TemplateDemoKey } from './locales'
 import { DISABLED_GLOBAL, type DisabledFlag } from '../shared/disabled-flag'
 import { pingHost } from './api'
-import { TemplateSection } from './TemplateSection'
-import { TemplateDisabledSection } from './TemplateDisabledSection'
+import { TemplateSection, type TemplateSectionInjected } from './TemplateSection'
+import { TemplateDisabledSection, type TemplateDisabledSectionInjected } from './TemplateDisabledSection'
 import { cssText } from './TemplateSection.module.css'
 
 export const name = 'dsh-plugin-template'
@@ -58,6 +61,8 @@ export function apply(ctx: ClientContext): void {
   const disabledFlag = (window as unknown as Record<string, unknown>)[DISABLED_GLOBAL] as DisabledFlag | undefined
   if (disabledFlag !== undefined) {
     const reason = typeof disabledFlag.reason === 'string' ? disabledFlag.reason : ''
+    const min = typeof disabledFlag.min === 'string' ? disabledFlag.min : ''
+    const max = typeof disabledFlag.max === 'string' ? disabledFlag.max : ''
     console.warn(`[dsh-plugin-template] host half disabled: ${reason}`)
     ctx.slots.inject('settings.section', () =>
       ctx.slots.register(
@@ -67,7 +72,7 @@ export function apply(ctx: ClientContext): void {
           order: 100,
           label: () => t('nav'),
           locale: DEMO_NS,
-          inject: () => ({ reason }),
+          inject: (): TemplateDisabledSectionInjected => ({ reason, min, max }),
         },
         TemplateDisabledSection,
       ),
@@ -90,7 +95,7 @@ export function apply(ctx: ClientContext): void {
         order: 100,
         label: () => t('nav'),
         locale: DEMO_NS,
-        inject: () => ({
+        inject: (): TemplateSectionInjected => ({
           demo: {
             ping: (text) => pingHost(connection.rpc, text),
           },

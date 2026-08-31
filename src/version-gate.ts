@@ -3,8 +3,9 @@
  *
  * `dsh plugin --profile <name> add …` 只是 pnpm 转发器（harness
  * apps/cli/src/plugin.ts），harness 侧没有插件版本门禁钩子，安装期无法从
- * 插件包内拦截；门禁在插件 apply 时执行（见 index.ts），超出上限默认
- * 软禁用：打印醒目错误日志后插件整体 no-op，不影响 dsh web 启动。
+ * 插件包内拦截；门禁在插件 apply 时执行（见 index.ts），版本落在
+ * [MIN_HARNESS_VERSION, MAX_HARNESS_VERSION] 窗口外默认软禁用：打印醒目
+ * 错误日志后插件整体 no-op，不影响 dsh web 启动。
  *
  * 失败语义之所以是软禁用而不是抛错 fail-loud：cordis Loader 与
  * dsh-app-boot 对插件 import/apply 抛错零容忍（boot reject →
@@ -26,8 +27,16 @@ import { createRequire } from 'node:module'
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-/** 支持上限（含）：仅当 harness 版本 <= 0.1.1-rc.2 时插件允许加载。 */
-export const MAX_HARNESS_VERSION = '0.1.1-rc.2'
+/**
+ * 支持下限（含）：harness 版本 < 0.1.2-alpha.2 时插件拒绝加载。
+ * 语义 = 插件代码实际使用的 API 面所要求的最低 harness 版本（当前引用了
+ * 0.1.2-alpha.2 才存在的 dsh-client-ui-chat / dsh-client-ui-renderer），
+ * 与 peerDependencies 下限对应；只有当插件移除了对某版新 API 的依赖时才下调。
+ */
+export const MIN_HARNESS_VERSION = '0.1.2-alpha.2'
+
+/** 支持上限（含）：仅当 harness 版本 <= 0.1.2-alpha.2 时插件允许加载。 */
+export const MAX_HARNESS_VERSION = '0.1.2-alpha.2'
 
 /** 插件包根目录（lib/version-gate.js → ../），用于拒绝解析到自身依赖副本。 */
 const PLUGIN_ROOT = fileURLToPath(new URL('..', import.meta.url)).toLowerCase()
@@ -124,9 +133,15 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-/** 版本门禁：harness 版本 > 上限时抛错（由调用方决定软禁用还是 fail-loud），否则直接返回。 */
+/** 版本门禁：harness 版本落在 [MIN, MAX] 窗口外时抛错（由调用方决定软禁用还是 fail-loud），否则直接返回。 */
 export function assertHarnessSupported(): void {
   const installed = installedHarnessVersion()
+  if (compareVersions(installed, MIN_HARNESS_VERSION) < 0) {
+    throw new Error(
+      `dsh-plugin-template: 该插件要求 DeepSeek Harness >= ${MIN_HARNESS_VERSION}，当前安装的是 ${installed}。`
+      + `请将 harness 升级到 >= ${MIN_HARNESS_VERSION}，或改用与旧版 harness 兼容的插件版本。`,
+    )
+  }
   if (compareVersions(installed, MAX_HARNESS_VERSION) > 0) {
     throw new Error(
       `dsh-plugin-template: 该插件仅支持 DeepSeek Harness <= ${MAX_HARNESS_VERSION}，当前安装的是 ${installed}。`

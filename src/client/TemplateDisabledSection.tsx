@@ -8,9 +8,11 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import classes from './TemplateSection.module.css'
 
-/** 组件的 inject face：host 半给出的停用原因。 */
+/** 组件的 inject face：host 半给出的停用原因与支持版本窗口。 */
 export interface TemplateDisabledSectionInjected {
   reason: string
+  min: string
+  max: string
 }
 
 export type TemplateDisabledSectionProps = PropsRuntime<'settings.section'> &
@@ -19,12 +21,13 @@ export type TemplateDisabledSectionProps = PropsRuntime<'settings.section'> &
 
 /** 版本不兼容说明页（只读，无交互）。 */
 export function TemplateDisabledSection(props: TemplateDisabledSectionProps) {
-  const { t, reason } = props
+  const { t, reason, min, max } = props
   return (
     <div className={classes.section}>
       <h2 className={classes.title}>{t('title')}</h2>
       <p className={classes.intro}>{t('disabledTitle')}</p>
       <p className={classes.intro}>{reason !== '' ? reason : t('disabledFallback')}</p>
+      {min !== '' && max !== '' && <p className={classes.intro}>{t('disabledWindow', { min, max })}</p>}
       <p className={classes.intro}>{t('disabledHint')}</p>
     </div>
   )

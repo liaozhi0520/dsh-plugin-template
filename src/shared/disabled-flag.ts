@@ -14,7 +14,11 @@
 /** 注入 index.html 的全局标记名（`globalThis[DISABLED_GLOBAL]`）。 */
 export const DISABLED_GLOBAL = '__DSH_PLUGIN_TEMPLATE_DISABLED__'
 
-/** 标记载荷：host 半给出的停用原因（含 harness 版本指引）。 */
+/** 标记载荷：host 半给出的停用原因（含 harness 版本指引）与支持窗口。 */
 export interface DisabledFlag {
   reason: string
+  /** 支持下限（含），与 version-gate.ts 的 MIN_HARNESS_VERSION 一致。 */
+  min: string
+  /** 支持上限（含），与 version-gate.ts 的 MAX_HARNESS_VERSION 一致。 */
+  max: string
 }
