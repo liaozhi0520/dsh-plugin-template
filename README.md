@@ -10,19 +10,54 @@
 
 ## 使用本模板
 
-1. 复制本目录（或点 GitHub 的 "Use this template"），然后**全局改名**：
+1. 复制本目录（或点 GitHub 的 "Use this template"），然后**改名**——插件身份散布在
+   15+ 个位点，且部分藏在运行路径里（cordis 插件名、Typert `package` 字段、
+   端点描述符 id、invariant 伴随件名、`__ModuleLoader__` id）。漏改**不报错**，
+   只表现为"装上但功能不认"，所以**优先用脚本**：
+
+   ```sh
+   pnpm rename <你的包名>             # 例：pnpm rename @you/dsh-foo
+   pnpm rename <你的包名> --dry-run   # 先预览将改哪些文件，不写入
+   ```
+
+   `scripts/rename.mjs` 以 `package.json` 的当前 `name` 为基线，一次性替换全部身份
+   位点并做全仓库残留检查：
+
+   - **包名**：`package.json`、`cordis.patch.yml` 的 id/name、tsdown banner 的
+     `__ModuleLoader__` id + CSS 虚拟模块前缀、host/client 入口的
+     `export const name`、Typert `package` 字段与端点描述符 id、invariant 伴随件名；
+   - **前缀**：`src/version-gate.ts` 错误前缀、`DSH_<前缀>_STRICT` 环境变量名、
+     `__DSH_<前缀>_DISABLED__` 全局标记名（`src/shared/disabled-flag.ts`）；
+   - **路径**：`cordis.dev.yml` 的 root 绝对路径与顶部用法注释（按脚本自身位置
+     自动写回，不假设"包名 == 目录名"）。
+
+   > 脚本支持重复改名（基线始终取自 `package.json`），不依赖任何模板名常量。
+
+2. 手工改名（仅当脚本不可用）：设 `<当前包名>` = `package.json` 的 `name`，
+   `<当前前缀>` = 去掉 `@scope/` 后全大写、`-`/`.` 转 `_`。先在全局把
+   `<当前前缀>` → 新前缀、`<当前包名>` → 新包名，再按下表逐项核对：
 
    | 位置 | 改成你的 |
    |---|---|
    | `package.json` 的 `name` | 你的包名（如 `@you/dsh-foo`） |
    | `cordis.patch.yml` 的 `id` / `name` | 同上 |
-   | `tsdown.config.ts` banner 里的 `id` | 同上 |
-   | `src/client/index.ts` 的 slot `id`、label | 你的 UI 标识 |
-   | `src/version-gate.ts` 的错误前缀与 `DSH_PLUGIN_TEMPLATE_STRICT` 环境变量名、`src/shared/disabled-flag.ts` 的 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记名 | 换成你的包名前缀 |
-   | `cordis.dev.yml` 的 `root` 绝对路径 | 本模板在你机器上的 `lib/` 路径 |
+   | `tsdown.config.ts` banner 的 `id` + CSS 虚拟模块前缀 | 同上 |
+   | `src/index.ts` 的 `export const name` + Typert `package:` 字段 | 同上（cordis 插件名，漏改 ⇒ 身份错位） |
+   | `src/client/index.ts` 的 `export const name` + 两处 slot `id` | 同上 |
+   | `src/remote.ts` 的端点描述符 `id`（`<当前包名>#…`） | 同上（Typert 关联，漏改 ⇒ RPC 失败） |
+   | `src/invariant.ts` 的 `PACKAGE_NAME` / `name` | 同上（伴生插件名） |
+   | `src/version-gate.ts` 错误前缀、`DSH_<前缀>_STRICT` 错误前缀变量名 | 新前缀 + `_STRICT` |
+   | `src/shared/disabled-flag.ts` 的 `__DSH_<前缀>_DISABLED__` 变量名 | `__<新前缀>_DISABLED__` |
+   | `cordis.dev.yml` 的 root 绝对路径（root 列表 + 顶部用法注释） | 本模板在你机器上的 `lib/` 路径 |
+   | `src/client/locales.ts` 的 `nav` / `title`（slot label 来自这里） | 你的 UI 标识（如 "Meme 生成"） |
    | `LICENSE` 版权行 | 你的名字 |
+   | 其余：`README.md` / `AGENTS.md` / 示例文案里出现的旧名 | 同上（残留检查见第 4 步） |
 
-2. 安装依赖：`pnpm install`（全部来自 npm，会自动跑 `prepare` 完成首次构建）。
+3. 安装依赖：`pnpm install`（全部来自 npm，会自动跑 `prepare` 完成首次构建）。
+
+4. 验证改名：`pnpm typecheck && pnpm build` 通过，且全仓库无旧身份串（改名脚本已
+   自动做残留检查；手工改名则用 `git grep` 复核）。若该目录此前已
+   `dsh plugin --profile web add` 安装过，改名后重跑一次 `add`。
 
 ## 开发（HMR）
 
@@ -50,7 +85,7 @@ dsh web --patch <本模板目录>/cordis.dev.yml --no-open
 然后：
 
 - **改 `src/index.ts`（host 半）** → tsc 重写 `lib/index.js` → cordis-plugin-hmr 重载插件 → 终端打印新的 `host half loaded` 日志。在 Web UI 让 agent 调用 `greet` 工具验证。
-- **改 `src/client/index.tsx`（client 半）** → tsdown 重写 `lib/client.js`（<100ms）→ host 的 client-hmr 轮询发现 → SSE 广播 → **浏览器不刷新页面就地更新**。打开 `http://127.0.0.1:3080` → 设置 → "HMR 演示"面板可见。
+- **改 `src/client/index.ts`（client 半）** → tsdown 重写 `lib/client.js`（<100ms）→ host 的 client-hmr 轮询发现 → SSE 广播 → **浏览器不刷新页面就地更新**。打开 `http://127.0.0.1:3080` → 设置 → "HMR 演示"面板可见。
 
 无浏览器验证 client 链：`curl -N http://127.0.0.1:3080/plugins/events`，改 client 源码会实时收到 `data: {"type":"rebuilt","id":"dsh-plugin-template",...}`。
 
@@ -139,6 +174,7 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ├── src/client/TemplateDisabledSection.tsx  # 版本不兼容"已停用"说明面板
 ├── src/client/TemplateSection.module.css  # 演示样式（CSS Modules + --dsw 设计令牌）
 ├── scripts/dev.mjs                   # pnpm dev：并行两个构建监视器
+├── scripts/rename.mjs                # pnpm rename <包名>：一键替换全部身份位点 + 残留检查
 ├── tsdown.config.ts                  # client bundle 构建（CJS 工厂 + 基线外部化 + CSS Modules 内联）
 ├── tsconfig.json                     # 全量类型检查（pnpm typecheck）
 ├── tsconfig.build.json               # host 半构建（lib/index.js + lib/invariant.js）
