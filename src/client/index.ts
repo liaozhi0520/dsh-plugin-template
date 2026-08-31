@@ -16,8 +16,10 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { DEMO_NS, en, zh, type TemplateDemoKey } from './locales'
+import { DISABLED_GLOBAL, type DisabledFlag } from '../shared/disabled-flag'
 import { pingHost } from './api'
 import { TemplateSection } from './TemplateSection'
+import { TemplateDisabledSection } from './TemplateDisabledSection'
 import { cssText } from './TemplateSection.module.css'
 
 export const name = 'dsh-plugin-template'
@@ -49,6 +51,29 @@ export function apply(ctx: ClientContext): void {
 
   // 列表 label 支持 thunk：locale 切换时重读，无需重注册。
   const t = ctx.locale.bind(DEMO_NS)
+
+  // host 半版本门禁软禁用时注入的全局标记（shared/disabled-flag.ts）：
+  // 存在 → 只挂"已停用"说明面板，不注册任何业务能力；不存在 → 正常加载。
+  // 版本判断只有 host 半一份，client 不复制。
+  const disabledFlag = (window as unknown as Record<string, unknown>)[DISABLED_GLOBAL] as DisabledFlag | undefined
+  if (disabledFlag !== undefined) {
+    const reason = typeof disabledFlag.reason === 'string' ? disabledFlag.reason : ''
+    console.warn(`[dsh-plugin-template] host half disabled: ${reason}`)
+    ctx.slots.inject('settings.section', () =>
+      ctx.slots.register(
+        {
+          name: 'settings.section',
+          id: 'dsh-plugin-template',
+          order: 100,
+          label: () => t('nav'),
+          locale: DEMO_NS,
+          inject: () => ({ reason }),
+        },
+        TemplateDisabledSection,
+      ),
+    )
+    return
+  }
 
   // 通用 RPC 通道（连接层提供）：浏览器 → host 的 template/ping。
   // 官方未给 client 侧 Context 增补 connection 属性，get + 类型断言是收敛的取法。

@@ -1,9 +1,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: 给 TypertRegistryContract 增补 register() 等方法（声明合并）。
 import type {} from '@deepseek-ai/dsh-typert-registry'
+// Type-only：'webserver/index-inject' 事件 + IndexInjection 行类型（软禁用标记注入）。
+import type {} from '@deepseek-ai/dsh-host-webserver'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { PING_DESCRIPTOR, TemplateRemote } from './remote.js'
+import { DISABLED_GLOBAL } from './shared/disabled-flag.js'
+import { assertHarnessSupported } from './version-gate.js'
 
 export const name = 'dsh-plugin-template'
 export const inject = ['tools', 'typert']
@@ -21,6 +25,28 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 export function apply(ctx: Context, config: Config) {
+  // 版本门禁：超出上限默认软禁用——醒目错误日志 + 插件不注册任何业务能力，
+  // 不影响 dsh web 启动与其他插件（Loader/app-boot 对插件抛错零容忍，
+  // 抛错 = 整个 harness exit(1)，见 version-gate.ts 注释）。
+  // DSH_PLUGIN_TEMPLATE_STRICT=1 恢复抛错 fail-loud（CI / 排查场景）。
+  try {
+    assertHarnessSupported()
+  } catch (error) {
+    if (process.env.DSH_PLUGIN_TEMPLATE_STRICT) throw error
+    const reason = error instanceof Error ? error.message : String(error)
+    console.error(`[dsh-plugin-template] ${reason}`)
+    console.error('[dsh-plugin-template] 版本不兼容，插件已停用（不影响 DSH 启动与其他插件）。')
+    // 告知 client 半：经 webserver/index-inject 向 index.html 注入全局标记，
+    // 浏览器端据此刻出"已停用"说明面板（client/index.ts）。这是软禁用路径
+    // 唯一注册的东西；ctx.on 是 fiber-bound effect——插件卸载/HMR 重载即
+    // 撤销监听，注入表每次 index 请求现收现渲（webserver
+    // collectIndexInjections），无持久状态、无残留。
+    ctx.on('webserver/index-inject', (table) => {
+      table.push({ kind: 'global', name: DISABLED_GLOBAL, value: { reason } })
+    })
+    return
+  }
+
   // 通过 ctx 注册的任何东西（工具、监听器、定时器……）都是一个可逆 effect：
   // HMR 重载本插件时会自动卸载旧实例的全部注册，再用新代码重新 apply。
   ctx.tools.register(defineTool({
