@@ -63,6 +63,7 @@ export function apply(ctx: ClientContext): void {
     const reason = typeof disabledFlag.reason === 'string' ? disabledFlag.reason : ''
     const min = typeof disabledFlag.min === 'string' ? disabledFlag.min : ''
     const max = typeof disabledFlag.max === 'string' ? disabledFlag.max : ''
+    const installVersion = typeof disabledFlag.installVersion === 'string' ? disabledFlag.installVersion : ''
     console.warn(`[dsh-plugin-template] host half disabled: ${reason}`)
     ctx.slots.inject('settings.section', () =>
       ctx.slots.register(
@@ -72,7 +73,7 @@ export function apply(ctx: ClientContext): void {
           order: 100,
           label: () => t('nav'),
           locale: DEMO_NS,
-          inject: (): TemplateDisabledSectionInjected => ({ reason, min, max }),
+          inject: (): TemplateDisabledSectionInjected => ({ reason, min, max, installVersion }),
         },
         TemplateDisabledSection,
       ),

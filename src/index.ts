@@ -41,8 +41,11 @@ export function apply(ctx: Context, config: Config) {
     // 唯一注册的东西；ctx.on 是 fiber-bound effect——插件卸载/HMR 重载即
     // 撤销监听，注入表每次 index 请求现收现渲（webserver
     // collectIndexInjections），无持久状态、无残留。
+    // 推荐安装目标版本直接用支持上限 MAX（窗口内最新版，升级/降级都装它）；
+    // 版本判断只在本进程有一份，client 面板直接照此渲染安装命令，不自行推导。
+    const installVersion = MAX_HARNESS_VERSION
     ctx.on('webserver/index-inject', (table) => {
-      table.push({ kind: 'global', name: DISABLED_GLOBAL, value: { reason, min: MIN_HARNESS_VERSION, max: MAX_HARNESS_VERSION } })
+      table.push({ kind: 'global', name: DISABLED_GLOBAL, value: { reason, min: MIN_HARNESS_VERSION, max: MAX_HARNESS_VERSION, installVersion } })
     })
     return
   }

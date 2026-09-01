@@ -21,4 +21,10 @@ export interface DisabledFlag {
   min: string
   /** 支持上限（含），与 version-gate.ts 的 MAX_HARNESS_VERSION 一致。 */
   max: string
+  /**
+   * 推荐安装目标版本：固定取支持上限 MAX（窗口内最新版，升级/降级都装它），
+   * 由 host 半软禁用分支给出；client 直接渲染
+   * `npm install -g @deepseek-ai/dsh@<installVersion>`，不自行推导。
+   */
+  installVersion: string
 }
