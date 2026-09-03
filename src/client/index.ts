@@ -9,10 +9,10 @@
  * 无 default 导出、只导出 cordis 加载所需（name/inject/apply）；
  * 文案走 locale 词典、样式走 CSS Modules、组件数据走四份 props shares。
  */
-// Type-only: client 侧 Context（alpha.2 起 dsh-client-runtime 移除，按官方插件惯例用 cordis Context）。
+// Type-only: client 侧 Context（直接用 cordis Context，按官方插件惯例）。
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: ctx.slots 服务增强（alpha.2 起 SlotRegistry 归属 ui-renderer）。
-import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+// Type-only: ctx.slots 服务增强（0.1.1 线 SlotRegistry 归属 dsh-client-runtime）。
+import type {} from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: ctx.locale service augmentation (LocaleRuntime) + common namespace merge.
 import type {} from '@deepseek-ai/dsh-client-locale/client'

@@ -10,54 +10,64 @@
 
 ## 使用本模板
 
-1. 复制本目录（或点 GitHub 的 "Use this template"），然后**改名**——插件身份散布在
-   15+ 个位点，且部分藏在运行路径里（cordis 插件名、Typert `package` 字段、
-   端点描述符 id、invariant 伴随件名、`__ModuleLoader__` id）。漏改**不报错**，
-   只表现为"装上但功能不认"，所以**优先用脚本**：
+通过 GitHub 的 "Use this template" **创建新的插件仓库**（仓库名随意），**克隆到本地**后，
+先**改名**。改名前搞懂插件身份由**三样东西**组成，它们互相派生：
 
-   ```sh
-   pnpm rename <你的包名>             # 例：pnpm rename @you/dsh-foo
-   pnpm rename <你的包名> --dry-run   # 先预览将改哪些文件，不写入
-   ```
+| 概念 | 本模板取值 | 怎么派生 |
+|---|---|---|
+| **短插件 id** | `dsh-plugin-template` | = **仓库名**（use-this-template 建库时你起的名字；克隆到本地即根文件夹名） |
+| **npm 包名**（scoped） | `@scoped/dsh-plugin-template` | `@<scope>/` + 短 id；`@scope` = 你的 npm 用户名 |
+| **环境前缀** | `DSH_PLUGIN_TEMPLATE` | 短 id 全大写、`-`/`.` 转 `_` |
 
-   `scripts/rename.mjs` 以 `package.json` 的当前 `name` 为基线，一次性替换全部身份
-   位点并做全仓库残留检查：
+`@scope` 怎么拿：`npm whoami`（未登录先 `npm login`）。本模板占位为
+`@scoped/dsh-plugin-template`，把 `@scoped` 换成 `npm whoami` 的结果即可。
 
-   - **包名**：`package.json`、`cordis.patch.yml` 的 id/name、tsdown banner 的
-     `__ModuleLoader__` id + CSS 虚拟模块前缀、host/client 入口的
-     `export const name`、Typert `package` 字段与端点描述符 id、invariant 伴随件名；
-   - **前缀**：`src/version-gate.ts` 错误前缀、`DSH_<前缀>_STRICT` 环境变量名、
-     `__DSH_<前缀>_DISABLED__` 全局标记名（`src/shared/disabled-flag.ts`）；
-   - **路径**：`cordis.dev.yml` 的 root 绝对路径与顶部用法注释（按脚本自身位置
-     自动写回，不假设"包名 == 目录名"）。
+改名 = 换这三样东西，各有固定落点。**漏改不报错**——这些标识只是注册 key，构建/加载
+都不校验一致性，漏改只会让对应功能静默失效（面板不出现、HMR 不重载、RPC 404），
+所以必须逐表核对。建议执行顺序：**先全局换短 id（包名里的短 id 会一并变）→ 再换 3 处
+scope → 再换前缀 → 最后核对顺手项**。
 
-   > 脚本支持重复改名（基线始终取自 `package.json`），不依赖任何模板名常量。
+### ① npm 包名（scoped）—— 只 3 处
 
-2. 手工改名（仅当脚本不可用）：设 `<当前包名>` = `package.json` 的 `name`，
-   `<当前前缀>` = 去掉 `@scope/` 后全大写、`-`/`.` 转 `_`。先在全局把
-   `<当前前缀>` → 新前缀、`<当前包名>` → 新包名，再按下表逐项核对：
+| 位置 | 改成 |
+|---|---|
+| `package.json` 的 `name` | `@<新scope>/<新短id>` |
+| `cordis.patch.yml` 的 `name:` | `"@<新scope>/<新短id>"`（**必须加引号**，YAML 里 `@` 是保留指示符；按它解析到包 `exports['.']`） |
+| `tsdown.config.ts` banner 的 `__ModuleLoader__` id | 同上（client 按包名发现） |
 
-   | 位置 | 改成你的 |
-   |---|---|
-   | `package.json` 的 `name` | 你的包名（如 `@you/dsh-foo`） |
-   | `cordis.patch.yml` 的 `id` / `name` | 同上 |
-   | `tsdown.config.ts` banner 的 `id` + CSS 虚拟模块前缀 | 同上 |
-   | `src/index.ts` 的 `export const name` + Typert `package:` 字段 | 同上（cordis 插件名，漏改 ⇒ 身份错位） |
-   | `src/client/index.ts` 的 `export const name` + 两处 slot `id` | 同上 |
-   | `src/remote.ts` 的端点描述符 `id`（`<当前包名>#…`） | 同上（Typert 关联，漏改 ⇒ RPC 失败） |
-   | `src/invariant.ts` 的 `PACKAGE_NAME` / `name` | 同上（伴生插件名） |
-   | `src/version-gate.ts` 错误前缀、`DSH_<前缀>_STRICT` 错误前缀变量名 | 新前缀 + `_STRICT` |
-   | `src/shared/disabled-flag.ts` 的 `__DSH_<前缀>_DISABLED__` 变量名 | `__<新前缀>_DISABLED__` |
-   | `cordis.dev.yml` 的 root 绝对路径（root 列表 + 顶部用法注释） | 本模板在你机器上的 `lib/` 路径 |
-   | `src/client/locales.ts` 的 `nav` / `title`（slot label 来自这里） | 你的 UI 标识（如 "Meme 生成"） |
-   | `LICENSE` 版权行 | 你的名字 |
-   | 其余：`README.md` / `AGENTS.md` / 示例文案里出现的旧名 | 同上（残留检查见第 4 步） |
+### ② 短插件 id —— 其余 15+ 处
 
-3. 安装依赖：`pnpm install`（全部来自 npm，会自动跑 `prepare` 完成首次构建）。
+| 位置 | 改成 |
+|---|---|
+| `cordis.patch.yml` 的 `id:` | `<新短id>` |
+| `src/index.ts` 的 `export const name` + Typert `package:` 字段 | 同上（cordis 插件名） |
+| `src/client/index.ts` 的 `export const name` + 两处 slot `id` | 同上 |
+| `src/remote.ts` 的端点描述符 `id`（`<短id>#…`） | 同上（Typert 关联） |
+| `src/invariant.ts` 的 `PACKAGE_NAME` / `name` | 同上（伴生插件名） |
+| `tsdown.config.ts` 的 CSS 虚拟模块前缀 + 插件名 | 同上 |
 
-4. 验证改名：`pnpm typecheck && pnpm build` 通过，且全仓库无旧身份串（改名脚本已
-   自动做残留检查；手工改名则用 `git grep` 复核）。若该目录此前已
-   `dsh plugin --profile web add` 安装过，改名后重跑一次 `add`。
+### ③ 环境前缀 —— 2 处 + 各文件错误/日志前缀
+
+| 位置 | 改成 |
+|---|---|
+| `src/version-gate.ts` 错误前缀、`DSH_<前缀>_STRICT` 变量名 | `<新前缀>` + `_STRICT` |
+| `src/shared/disabled-flag.ts` 的 `__DSH_<前缀>_DISABLED__` 变量名 | `__<新前缀>_DISABLED__` |
+
+### ④ 顺手项
+
+| 位置 | 改成 |
+|---|---|
+| `cordis.dev.yml` 的 root 绝对路径（root 列表 + 顶部用法注释） | 你机器上实际的 `lib/` 路径 |
+| `src/client/locales.ts` 的 `nav` / `title`（slot label 来自这里） | 你的 UI 标识（如 "Meme 生成"） |
+| `LICENSE` 版权行 | 你的名字 |
+| `README.md` / `AGENTS.md` / 示例文案里出现的旧短 id | 同上 |
+
+### 验证
+
+1. `pnpm install`（自动跑 `prepare` 完成首次构建）
+2. `pnpm typecheck && pnpm build` 通过
+3. `git grep <旧短id>` 与 `git grep <旧包名>`，全仓应无残留
+4. 若该目录此前已装进 profile：重跑 `dsh plugin --profile web add`
 
 ## 开发（HMR）
 
@@ -78,16 +88,16 @@ cd <deepseek-harness 仓库> && pnpm dsh plugin --profile web add <本模板目�
 pnpm dev
 
 # 终端 2：harness（叠加开发 overlay，重新启用 HMR 并监听 lib/）
-dsh web --patch <本模板目录>/cordis.dev.yml --no-open
-# 或源码仓库里：pnpm dsh web --patch ... --no-open
+dsh web --patch <本模板目录>/cordis.dev.yml --port 3081
+# 或源码仓库里：pnpm dsh web --patch ... --port 3081
 ```
 
 然后：
 
 - **改 `src/index.ts`（host 半）** → tsc 重写 `lib/index.js` → cordis-plugin-hmr 重载插件 → 终端打印新的 `host half loaded` 日志。在 Web UI 让 agent 调用 `greet` 工具验证。
-- **改 `src/client/index.ts`（client 半）** → tsdown 重写 `lib/client.js`（<100ms）→ host 的 client-hmr 轮询发现 → SSE 广播 → **浏览器不刷新页面就地更新**。打开 `http://127.0.0.1:3080` → 设置 → "HMR 演示"面板可见。
+- **改 `src/client/index.ts`（client 半）** → tsdown 重写 `lib/client.js`（<100ms）→ host 的 client-hmr 轮询发现 → SSE 广播 → **浏览器不刷新页面就地更新**。打开 `http://127.0.0.1:3081` → 设置 → "HMR 演示"面板可见。
 
-无浏览器验证 client 链：`curl -N http://127.0.0.1:3080/plugins/events`，改 client 源码会实时收到 `data: {"type":"rebuilt","id":"dsh-plugin-template",...}`。
+无浏览器验证 client 链：`curl -N http://127.0.0.1:3081/plugins/events`，改 client 源码会实时收到 `data: {"type":"rebuilt","id":"dsh-plugin-template",...}`。
 
 > **安装版 dsh 注意**：cordis-plugin-hmr 需要读 Node 内部模块加载器。若启动报 `--expose-internals is required for HMR`，用 `NODE_OPTIONS=--expose-internals dsh web ...` 启动即可（从源码运行的 `pnpm dsh` 自带 tsx，无此问题）。
 
@@ -96,7 +106,7 @@ dsh web --patch <本模板目录>/cordis.dev.yml --no-open
 harness 处于 0.1 rc 快速迭代期，要点：
 
 - **peer 与 dev 同一下限**：dev = 编译所用版本，peer = 运行时最低兼容声明（不强制 harness 升级，但旧环境装插件会得到 unmet peer 警告）。官方规则：every peer has a matching development range。
-- **范围写法**：用 `^0.1.2-alpha.x`（下限 = 已验证版本）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。
+- **范围写法**：用 `^0.1.1-rc.x`（下限 = 已验证版本）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。
 - **harness 版本门禁**：模板自带 `src/version-gate.ts`，要求 harness 版本落在 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]` 窗口内（MIN = 代码实际使用的 API 面要求的最低版本，与 peer 下限对应；MAX = 已验证兼容的最新版本，随 `bump:deps` 验证后上调）。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点解析 `@deepseek-ai/dsh-tools/package.json` 的已安装版本（与 harness 同版本发布；**不能**以插件自身为锚点——devDependencies 里的旧版开发副本会让解析永远命中插件自己的 node_modules，门禁静默失效）。落在窗口外默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持版本窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
 
 **追新流程**：
@@ -174,7 +184,6 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ├── src/client/TemplateDisabledSection.tsx  # 版本不兼容"已停用"说明面板
 ├── src/client/TemplateSection.module.css  # 演示样式（CSS Modules + --dsw 设计令牌）
 ├── scripts/dev.mjs                   # pnpm dev：并行两个构建监视器
-├── scripts/rename.mjs                # pnpm rename <包名>：一键替换全部身份位点 + 残留检查
 ├── tsdown.config.ts                  # client bundle 构建（CJS 工厂 + 基线外部化 + CSS Modules 内联）
 ├── tsconfig.json                     # 全量类型检查（pnpm typecheck）
 ├── tsconfig.build.json               # host 半构建（lib/index.js + lib/invariant.js）

@@ -17,7 +17,7 @@
 当需要查阅 DSH 的内部实现、插件 API、系统提示词组装、工具/上下文注入机制时，
 直接去该目录下阅读源码（`packages/` 为各功能包，`apps/` 为应用入口），不要凭空猜测行为。
 
-**注意签出版本**：该仓库用 tag 标记发布（如 `dsh-v0.1.2-alpha.2`）。
+**注意签出版本**：该仓库用 tag 标记发布（如 `dsh-v0.1.1-rc.2`；本插件当前适配 0.1.1 线）。
 进行版本相关的兼容性分析前，先 `git -C c:/deepseek-harness describe --tags`
 确认签出的 tag 与目标 harness 版本一致，不一致先 `git fetch --tags && git checkout <tag>`——
 用旧版源码分析新版行为会得出滞后结论。

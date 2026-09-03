@@ -28,15 +28,20 @@ import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
- * 支持下限（含）：harness 版本 < 0.1.2-alpha.2 时插件拒绝加载。
- * 语义 = 插件代码实际使用的 API 面所要求的最低 harness 版本（当前引用了
- * 0.1.2-alpha.2 才存在的 dsh-client-ui-chat / dsh-client-ui-renderer），
- * 与 peerDependencies 下限对应；只有当插件移除了对某版新 API 的依赖时才下调。
+ * 支持下限（含）：harness 版本 < 0.1.1-rc.2 时插件拒绝加载。
+ * 语义 = 插件代码实际使用的 API 面所要求的最低 harness 版本，
+ * 只实测过 0.1.1-rc.2；更低的 0.1.0 线未调研，如需支持另做分析后下调。
  */
-export const MIN_HARNESS_VERSION = '0.1.2-alpha.2'
+export const MIN_HARNESS_VERSION = '0.1.1-rc.2'
 
-/** 支持上限（含）：仅当 harness 版本 <= 0.1.2-alpha.2 时插件允许加载。 */
-export const MAX_HARNESS_VERSION = '0.1.2-alpha.2'
+/**
+ * 支持上限（含）：仅当 harness 版本 <= 0.1.1 时插件允许加载。
+ * semver 上 0.1.1-rc.x < 0.1.1 < 0.1.2-alpha.1，上限写 0.1.1 正好把
+ * 0.1.2 线整体排除（0.1.2 的会话视图拆分删除了 dsh-client-runtime、
+ * 移动了 ctx.slots 类型归属，本插件按 0.1.1 的 API 面编写）；
+ * 追新验证通过后再上调。
+ */
+export const MAX_HARNESS_VERSION = '0.1.1'
 
 /** 插件包根目录（lib/version-gate.js → ../），用于拒绝解析到自身依赖副本。 */
 const PLUGIN_ROOT = fileURLToPath(new URL('..', import.meta.url)).toLowerCase()
