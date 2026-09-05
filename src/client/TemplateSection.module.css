@@ -62,3 +62,102 @@
   border-radius: 6px;
   user-select: all;
 }
+
+/* --- 插件自更新（标题右侧紧凑更新条 + 标题行下详情行） --- */
+
+/* 标题行：左 = 标题；右 = 插件更新条（space-between 两端对齐） */
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+  justify-content: space-between;
+}
+
+/* 右侧更新条：版本徽标 + 状态词 + 动作按钮，保持一行紧凑；
+   长文案一律不进来——错误输出/重启提示走下方详情行 */
+.updateBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  row-gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 版本徽标 */
+.updateVersion {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 6px;
+}
+
+/* 更新条动作按钮（比 .button 紧凑一档） */
+.updateButton {
+  flex: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.updateButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 状态词基类：超长截断省略（错误词的完整全文在详情行 + title 悬停），
+   颜色由修饰类给 */
+.updateStatus {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.updateStatusOk {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.updateStatusError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 详情行：完整错误输出（含 dsh plugin add 输出尾部的多行文本）/ 更新成功的
+   重启提示。pre-wrap 保留换行、超长纵向滚动、文本可选中复制。
+   .section 自带 16px padding，详情行负 margin 贴近更新条。 */
+.updateDetail {
+  margin: -6px 0 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 150px;
+  overflow-y: auto;
+  user-select: text;
+}
+
+.updateDetailOk {
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.updateDetailError {
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}

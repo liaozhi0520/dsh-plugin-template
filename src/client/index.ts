@@ -11,8 +11,10 @@
  */
 // Type-only: client 侧 Context（直接用 cordis Context，按官方插件惯例）。
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: ctx.slots 服务增强（0.1.1 线 SlotRegistry 归属 dsh-client-runtime）。
-import type {} from '@deepseek-ai/dsh-client-runtime/client'
+// Type-only: ctx.slots 服务增强（0.1.2 起 SlotRegistry 归属 dsh-client-ui-renderer；
+// 0.1.1 线归 dsh-client-runtime）。type-only 导入编译期擦除，双线窗口
+// [0.1.1-rc.2, 0.1.2-rc.1] 运行时无感——迁移依据见 docs/compat-guide-0.1.1-to-0.1.2.md §2.2。
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: ctx.locale service augmentation (LocaleRuntime) + common namespace merge.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -20,7 +22,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { DEMO_NS, en, zh, type TemplateDemoKey } from './locales'
 import { DISABLED_GLOBAL, type DisabledFlag } from '../shared/disabled-flag'
-import { pingHost } from './api'
+import { checkUpdateViaHost, pingHost, updateSelfViaHost } from './api'
 import { TemplateSection, type TemplateSectionInjected } from './TemplateSection'
 import { TemplateDisabledSection, type TemplateDisabledSectionInjected } from './TemplateDisabledSection'
 import { cssText } from './TemplateSection.module.css'
@@ -97,8 +99,10 @@ export function apply(ctx: ClientContext): void {
         label: () => t('nav'),
         locale: DEMO_NS,
         inject: (): TemplateSectionInjected => ({
-          demo: {
+          api: {
             ping: (text) => pingHost(connection.rpc, text),
+            checkUpdate: () => checkUpdateViaHost(connection.rpc),
+            updateSelf: () => updateSelfViaHost(connection.rpc),
           },
         }),
       },

@@ -52,6 +52,7 @@ scope → 再换前缀 → 最后核对顺手项**。
 |---|---|
 | `src/version-gate.ts` 错误前缀、`DSH_<前缀>_STRICT` 变量名 | `<新前缀>` + `_STRICT` |
 | `src/shared/disabled-flag.ts` 的 `__DSH_<前缀>_DISABLED__` 变量名 | `__<新前缀>_DISABLED__` |
+| `src/self-update.ts` 的错误/日志前缀（`dsh-plugin-template:` / `[dsh-plugin-template]`） | 换成新短 id（包名/版本本身从自身 package.json 读，无需改） |
 
 ### ④ 顺手项
 
@@ -59,6 +60,7 @@ scope → 再换前缀 → 最后核对顺手项**。
 |---|---|
 | `cordis.dev.yml` 的 root 绝对路径（root 列表 + 顶部用法注释） | 你机器上实际的 `lib/` 路径 |
 | `src/client/locales.ts` 的 `nav` / `title`（slot label 来自这里） | 你的 UI 标识（如 "Meme 生成"） |
+| `src/shared/update-contract.ts` 端点 namespace（`'template/…'`）与 `src/remote.ts` 的 `namespace` / `serviceKey` / `service` | 与 Typert 服务名同源，改服务名时一并改 |
 | `LICENSE` 版权行 | 你的名字 |
 | `README.md` / `AGENTS.md` / 示例文案里出现的旧短 id | 同上 |
 
@@ -107,20 +109,50 @@ harness 处于 0.1 rc 快速迭代期，要点：
 
 - **peer 与 dev 同一下限**：dev = 编译所用版本，peer = 运行时最低兼容声明（不强制 harness 升级，但旧环境装插件会得到 unmet peer 警告）。官方规则：every peer has a matching development range。
 - **范围写法**：用 `^0.1.1-rc.x`（下限 = 已验证版本）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。
-- **harness 版本门禁**：模板自带 `src/version-gate.ts`，要求 harness 版本落在 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]` 窗口内（MIN = 代码实际使用的 API 面要求的最低版本，与 peer 下限对应；MAX = 已验证兼容的最新版本，随 `bump:deps` 验证后上调）。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点解析 `@deepseek-ai/dsh-tools/package.json` 的已安装版本（与 harness 同版本发布；**不能**以插件自身为锚点——devDependencies 里的旧版开发副本会让解析永远命中插件自己的 node_modules，门禁静默失效）。落在窗口外默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持版本窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
+- **harness 版本门禁**：模板自带 `src/version-gate.ts`，要求 harness 版本落在 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]` 窗口内（MIN = 代码实际使用的 API 面要求的最低版本，与 peer 下限对应；MAX = 已验证兼容的最新版本，追新实测通过后手动上调）。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点解析 `@deepseek-ai/dsh-tools/package.json` 的已安装版本（与 harness 同版本发布；**不能**以插件自身为锚点——devDependencies 里的旧版开发副本会让解析永远命中插件自己的 node_modules，门禁静默失效）。落在窗口外默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持版本窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
 
-**追新流程**：
+**追新流程（手动，无脚本）**：
+
+下限抬升刻意做成显式手改——目标线选择、破坏面评估、门禁 MAX 三件事本来就该人工过目；交给脚本反而会引入「当前线」的语义模糊（实测教训：`0.1.x` 线内 `0.1.1 → 0.1.2` 这种带破坏性变更的跨 patch 追新会被脚本静默扫进来，`^0.1.1-rc.2` 的 semver 语义也挡不住它自己挑的版本），并集范围、多线并存等状态更是脚本正则管不住的。追新的每一步都值得慢下来看一眼：
 
 ```sh
-pnpm bump:deps                      # ① 查最新 ② 抬 peer/dev 下限 ③ pnpm install
-pnpm typecheck && pnpm build        # 红 = 上游破坏性变更，按报错修
+# ① 查目标线的最新版本（各 @deepseek-ai/dsh-* 与 harness 同步发版，查 dsh-tools 即可代表全线）：
+pnpm view @deepseek-ai/dsh-tools versions --json
+
+# ② 手改 package.json：把全部 @deepseek-ai/dsh-* 的 peer 与 dev 下限改成同一目标——
+#    单线：^0.1.2-rc.1
+#    双线并集：^0.1.1-rc.2 || ^0.1.2-rc.1（peer 写并集、dev 钉死一条线，见下节）
+#    新线才有、只 import type 的包只进 dev（旧线运行时缺席无害）
+
+# ③ 同步与验证：
+pnpm install
+pnpm typecheck && pnpm build        # 红 = 上游破坏性变更，按 docs/compat-guide 的迁移清单修
+
+# ④ 实测通过后手动上调 src/version-gate.ts 的 MAX_HARNESS_VERSION
 ```
 
-脚本 `scripts/bump-deps.mjs` 只抬当前 minor 线内的最新 rc（跨线 0.2.x 是破坏性变更，需手动改下限）。
-
 - 不用 `pnpm update`：它会剥掉 rc 包的 `^`（实测），且不碰 peer 侧。
-- 跨线升级（0.2.x）：同样抬下限到 `^0.2.0-rc.x`，peer/dev 一起。
+- **下限 = 已验证承诺**：抬下限等于宣布「插件已在那个版本上验证过」，没实测过的版本不要抬。
 - 锁文件会钉住首次安装版本：想每次克隆都最新就删掉它，否则按上面流程主动抬下限。
+
+**双线兼容（同时支持旧线 + 新线 harness）**：
+
+本模板自身即按双线窗口 `[0.1.1-rc.2, 0.1.2-rc.1]` 发布（peer 并集 + dev 钉 0.1.2-rc.1，执行记录 `docs/compat-plan-0.1.2-rc.1.md`）。差异事实与兼容代码看 `docs/compat-guide-0.1.1-to-0.1.2.md`（0.1.1 ↔ 0.1.2 全量取证手册），执行流程照 `docs/compat-plan-TEMPLATE.md` 复制填写。要点：
+
+- 依赖写法：peer = 安装期承诺，双线写**并集** `^0.1.1-rc.2 || ^0.1.2-rc.1`；dev = typecheck 目标，**永远钉一条线**（写并集是实测坑：pnpm 沿用 lockfile 首臂旧解析，typecheck 目标混线必炸）；新线专属包只进 dev（只 `import type` 时编译期擦除，旧线运行时缺席无害）；
+- `dsh.client.inject` 与 tsdown `neverBundle` 只列**所有支持线都存在**的包——新线专属包进 inject 会让旧线 web 启动硬失败（boot graph 的 inject 是 factory 先达边，不是注释）；
+- 类型层破坏 = 迁移 `import type`（编译期擦除，运行时零分叉）；运行时破坏 = 特征探测（`??` 链 + 最小收窄接口，新 API 在前、旧 API 兜底），禁止 import 两套再 if-else；
+- 旧线兼容属推断：typecheck 只对新线一套 import 链成立，必须旧线冒烟坐实（覆盖每个探测 fallback 分支）；`MAX_HARNESS_VERSION` 只写已验证 tag；每次迁移留 `docs/compat-plan-<版本>.md` 执行记录。
+
+## 插件自更新
+
+设置面板标题行右侧内置「检查更新 / 立即更新」条（client 半 `TemplateSection.tsx` 六态状态机 + host 半 `src/self-update.ts`，经 `template/checkUpdate` / `template/updateSelf` RPC）：
+
+- **检查**：当前版本 vs npm registry `/<pkg>/latest`（严格 semver 比较，含预发布规则）；面板 mount 时静默查一次，离线不打扰、手动可重试；
+- **更新**：一律走**官方 CLI 通道** `dsh plugin --profile <name> add <pkg>@<version>`（harness 侧的官方转发器 = pnpm add + bundles reconcile，与手动安装同构）；profile 三级定位（① 包根上溯 registry 实体安装 → ② link 开发副本 realpath 反查 + 启动 argv 权威裁决 → ③ 报错给手动命令）；安装前用 `dsh plugin list --json` 交叉核对 profile 目录与依赖认领；成功后提示重启 harness 生效；
+- **前提**：插件必须已发布到 npm。GitHub-only 分发（未发 npm）时 registry 检查失败——面板静默/手动重试，属预期行为；
+- **软禁用态没有更新条**：版本门禁软禁用时 host 半不注册任何端点（RPC 必然 404），停用面板只给 harness 版本修复引导——插件更新不了 harness，也不该试图更新；
+- 并发与竞态：重复点击合并进同一次安装（host 半 in-flight 锁）；点更新时 latest 回落到 ≤ 当前则归位「已是最新」；更新只换磁盘，需重启 harness 加载新 host 半。
 
 ## 发布到 npm
 
@@ -173,16 +205,20 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ```
 ├── src/index.ts                      # host half 入口（版本门禁 + greet 工具示例 + Typert 端点注册）
 ├── src/version-gate.ts               # harness 版本门禁（软禁用语义 + CLI 锚点解析 + semver 比较）
+├── src/self-update.ts                # 插件自更新 host 半（registry 检查 + 官方 dsh plugin add 通道）
 ├── src/shared/disabled-flag.ts       # host→client 的软禁用标记契约（全局变量名 + 载荷形状）
-├── src/remote.ts                     # host 半 Typert 远程端点示例（template/ping，第三方安全形态）
+├── src/shared/update-contract.ts     # 自更新 RPC 契约（端点名 + 请求/结果类型，两端共用）
+├── src/remote.ts                     # host 半 Typert 远程端点（template/*，表驱动描述符 + 第三方安全形态）
 ├── src/invariant.ts                  # 官方 invariant 伴随件（每包必有）
 ├── src/css-modules.d.ts              # CSS Modules 导入声明（*.module.css）
 ├── src/client/index.ts               # client half 入口（词典/样式/槽位注册组装 + 停用标记分支，无 JSX）
 ├── src/client/locales.ts             # zh/en 词典（所有 UI 文案走 locale key）
-├── src/client/api.ts                 # 浏览器 → host 的 RPC 调用（ctx.connection.rpc）
-├── src/client/TemplateSection.tsx    # 演示组件（settings.section 面板）
+├── src/client/api.ts                 # 浏览器 → host 的 RPC 调用（OpResult 统一错误面）
+├── src/client/TemplateSection.tsx    # 演示组件（settings.section 面板 + 插件更新条）
 ├── src/client/TemplateDisabledSection.tsx  # 版本不兼容"已停用"说明面板
 ├── src/client/TemplateSection.module.css  # 演示样式（CSS Modules + --dsw 设计令牌）
+├── docs/compat-guide-0.1.1-to-0.1.2.md     # 0.1.1↔0.1.2 兼容手册（两线差异取证 + 带代码方案）
+├── docs/compat-plan-TEMPLATE.md            # 兼容迁移执行记录骨架（每次追新 cp 一份填写）
 ├── scripts/dev.mjs                   # pnpm dev：并行两个构建监视器
 ├── tsdown.config.ts                  # client bundle 构建（CJS 工厂 + 基线外部化 + CSS Modules 内联）
 ├── tsconfig.json                     # 全量类型检查（pnpm typecheck）

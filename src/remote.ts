@@ -1,5 +1,5 @@
 /**
- * Typert 远程端点演示：host 半向浏览器暴露 `template/ping`。
+ * Typert 远程端点：host 半向浏览器暴露 `template/*`。
  *
  * ⚠️ 第三方插件的形态选择（实验证实，勿改回装饰器）：
  * 官方包用 `TypertRemoteService` + `@Remote` 装饰器，端点发现依赖
@@ -10,11 +10,14 @@
  * 官方包不受影响是因为它们走构建期生成（typert-generator 产出 ./typert 产物）。
  * 因此第三方插件的正确形态：手写调用描述符注册进 `ctx.typert`，服务用纯数据
  * 对象 + 结构化 `typertRemote` 绑定（官方文档 docs/api-gateway.md 认可的等价物）。
+ *
+ * 端点表驱动：`template/*` 的描述符集中成 {@link DESCRIPTORS}（parameters 为
+ * 位置参数名表，no-arg 端点传 `[]`），新增端点 = 表里加一行 + 服务对象加一个
+ * 同名方法。codec 一律 src-json（仅 JSON 安全检查），边界校验在服务方法内。
  */
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-
-/** ping 端点的 wire 名（<namespace>/<method>）。 */
-export const PING_ENDPOINT = 'template/ping'
+import { applySelfUpdate, checkSelfUpdate } from './self-update.js'
+import type { TemplateUpdateApplyResult, TemplateUpdateCheckResult } from './shared/update-contract.js'
 
 /** ping 请求。 */
 export interface TemplatePingRequest {
@@ -29,19 +32,30 @@ export interface TemplatePingResult {
   at: number
 }
 
-/** `template/ping` 的调用描述符（src-json：仅 JSON 安全检查，边界校验在方法内）。 */
-export const PING_DESCRIPTOR: InvocationDescriptor = {
-  id: 'dsh-plugin-template#template/ping',
+/** `template/*` 端点的调用描述符表（id 格式 `<短插件id>#template/<method>`）。 */
+export const DESCRIPTORS: InvocationDescriptor[] = (
+  [
+    ['ping', ['request']],
+    ['checkUpdate', []],
+    ['updateSelf', []],
+  ] as const
+).map(([method, parameters]) => ({
+  id: `dsh-plugin-template#template/${method}`,
   service: 'template',
   namespace: 'template',
-  method: 'ping',
-  invocation: { kind: 'direct' },
-  parameters: [{ name: 'request', wire: 'request', source: 'json', codec: { mode: 'src-json' } }],
-  result: { mode: 'src-json' },
+  method,
+  invocation: { kind: 'direct' as const },
+  parameters: parameters.map((name) => ({ name, wire: name, source: 'json' as const, codec: { mode: 'src-json' as const } })),
+  result: { mode: 'src-json' as const },
+}))
+
+/** 服务方法失败的统一折叠（code 由调用点给：check-failed / update-failed）。 */
+function fail(code: string, error: unknown): { ok: false; error: { code: string; message: string } } {
+  return { ok: false, error: { code, message: error instanceof Error ? error.message : String(error) } }
 }
 
 /**
- * 演示远程服务（纯数据对象）：Gateway 分发只要求结构合法的
+ * 远程服务（纯数据对象）：Gateway 分发只要求结构合法的
  * `typertRemote` 绑定（service === 自身、serviceKey/namespace 一致）。
  */
 export class TemplateRemote {
@@ -55,5 +69,23 @@ export class TemplateRemote {
   async ping(request: TemplatePingRequest): Promise<TemplatePingResult> {
     const text = typeof request?.text === 'string' && request.text.trim() ? request.text.trim() : 'ping'
     return { ok: true, pong: text, at: Date.now() }
+  }
+
+  /** 检查更新：当前版本 vs npm registry latest（实现见 self-update.ts）。 */
+  async checkUpdate(): Promise<TemplateUpdateCheckResult> {
+    try {
+      return { ok: true, ...(await checkSelfUpdate()) }
+    } catch (error) {
+      return fail('check-failed', error)
+    }
+  }
+
+  /** 立即更新：经官方 dsh plugin add 通道安装最新版（重复调用合并）。 */
+  async updateSelf(): Promise<TemplateUpdateApplyResult> {
+    try {
+      return { ok: true, ...(await applySelfUpdate()) }
+    } catch (error) {
+      return fail('update-failed', error)
+    }
   }
 }

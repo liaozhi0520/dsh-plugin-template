@@ -26,6 +26,18 @@ export const en = {
   pinging: 'Pinging…',
   pingResult: 'Host answered "{pong}" at {at}',
   pingFailed: 'Ping failed: {message}',
+  // --- 插件自更新（标题右侧紧凑更新条；长文案走标题行下详情行） ---
+  updateVersion: 'v{version}',
+  updateCheck: 'Check for updates',
+  updateChecking: 'Checking…',
+  updateUpToDate: 'Up to date',
+  updateAvailable: 'New version {version}',
+  updateApply: 'Update now',
+  updateApplying: 'Updating…',
+  updateDoneShort: 'Updated to {version}',
+  updateDoneHint: 'Restart DeepSeek Harness to load it (settings are kept).',
+  updateCheckFailed: 'Check failed',
+  updateFailed: 'Update failed',
 } as const
 
 /** The template.demo namespace key union. */
@@ -47,6 +59,17 @@ export const zh: Record<TemplateDemoKey, string> = {
   pinging: '调用中…',
   pingResult: 'host 应答 "{pong}"（{at}）',
   pingFailed: '调用失败：{message}',
+  updateVersion: 'v{version}',
+  updateCheck: '检查更新',
+  updateChecking: '检查中…',
+  updateUpToDate: '已是最新',
+  updateAvailable: '新版本 {version}',
+  updateApply: '立即更新',
+  updateApplying: '更新中…',
+  updateDoneShort: '已更新到 {version}',
+  updateDoneHint: '重启 DeepSeek Harness 后生效（设置会保留）。',
+  updateCheckFailed: '检查失败',
+  updateFailed: '更新失败',
 }
 
 /** Locale namespace owned by this plugin. */

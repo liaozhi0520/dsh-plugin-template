@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-typert-registry'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import { PING_DESCRIPTOR, TemplateRemote } from './remote.js'
+import { DESCRIPTORS, TemplateRemote } from './remote.js'
 import { DISABLED_GLOBAL } from './shared/disabled-flag.js'
 import { assertHarnessSupported, MAX_HARNESS_VERSION, MIN_HARNESS_VERSION } from './version-gate.js'
 
@@ -85,7 +85,7 @@ export function apply(ctx: Context, config: Config) {
     face: 'host',
     schemas: [],
     model: { services: [], events: [], objects: [] },
-    invocations: [PING_DESCRIPTOR],
+    invocations: DESCRIPTORS,
   })
 
   console.log(`[dsh-plugin-template] host half loaded(v2), greeting = ${JSON.stringify(config.greeting)}`)

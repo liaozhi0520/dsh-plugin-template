@@ -35,13 +35,15 @@ import { fileURLToPath } from 'node:url'
 export const MIN_HARNESS_VERSION = '0.1.1-rc.2'
 
 /**
- * 支持上限（含）：仅当 harness 版本 <= 0.1.1 时插件允许加载。
- * semver 上 0.1.1-rc.x < 0.1.1 < 0.1.2-alpha.1，上限写 0.1.1 正好把
- * 0.1.2 线整体排除（0.1.2 的会话视图拆分删除了 dsh-client-runtime、
- * 移动了 ctx.slots 类型归属，本插件按 0.1.1 的 API 面编写）；
- * 追新验证通过后再上调。
+ * 支持上限（含）：仅当 harness 版本 <= 0.1.2-rc.1 时插件允许加载。
+ * semver 上 0.1.2-rc.x < 0.1.2 < 0.1.3-alpha.1，上限写 0.1.2-rc.1 把
+ * 0.1.2 后续 tag（rc.2/正式版）与 0.1.3 线整体排除——源码 typecheck 按
+ * 0.1.2-rc.1 的 API 面（0.1.2 会话视图拆分移动了 ctx.slots 类型归属，
+ * 迁移记录 docs/compat-plan-0.1.2-rc.1.md）；下限 0.1.1-rc.2 保持双线：
+ * 两线破坏面全在类型层、运行时面一致（docs/compat-guide-0.1.1-to-0.1.2.md）。
+ * 更晚的 tag 追新验证通过后再上调。
  */
-export const MAX_HARNESS_VERSION = '0.1.1'
+export const MAX_HARNESS_VERSION = '0.1.2-rc.1'
 
 /** 插件包根目录（lib/version-gate.js → ../），用于拒绝解析到自身依赖副本。 */
 const PLUGIN_ROOT = fileURLToPath(new URL('..', import.meta.url)).toLowerCase()
