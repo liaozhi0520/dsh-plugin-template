@@ -3,9 +3,9 @@
  *
  * `dsh plugin --profile <name> add …` 只是 pnpm 转发器（harness
  * apps/cli/src/plugin.ts），harness 侧没有插件版本门禁钩子，安装期无法从
- * 插件包内拦截；门禁在插件 apply 时执行（见 index.ts），版本落在
- * [MIN_HARNESS_VERSION, MAX_HARNESS_VERSION] 窗口外默认软禁用：打印醒目
- * 错误日志后插件整体 no-op，不影响 dsh web 启动。
+ * 插件包内拦截；门禁在插件 apply 时执行（见 index.ts），已安装 harness 版本
+ * 落在 [MIN_HARNESS_VERSION, MAX_HARNESS_VERSION] 窗口外时默认软禁用：
+ * 打印醒目错误日志后插件整体 no-op，不影响 dsh web 启动。
  *
  * 失败语义之所以是软禁用而不是抛错 fail-loud：cordis Loader 与
  * dsh-app-boot 对插件 import/apply 抛错零容忍（boot reject →
@@ -13,40 +13,40 @@
  * 插件抛错会拖垮整个 harness，影响面远超插件自身。设 DSH_PLUGIN_TEMPLATE_STRICT=1
  * 可恢复抛错（CI / 排查场景）。
  *
- * 版本源：@deepseek-ai/dsh-tools——本插件的 peer 之一，与 harness 各包
- * 同版本发布（monorepo 同步版本），其 exports 导出了 ./package.json。
+ * 版本源：@deepseek-ai/dsh（CLI 包本体）——`dsh --version` 与 npm dist-tag
+ * （latest/next）所指的就是这个包的 version 字段，语义上唯一正确的 "harness 版本"。
+ * 【不能】读 @deepseek-ai/dsh-tools 等内嵌依赖当 harness 版本：CLI 包对内嵌
+ * 依赖是 caret 语义，实装版本可能高于 CLI 本体（实测 @deepseek-ai/dsh@0.1.5-rc.1
+ * 内嵌的 dsh-tools 已解析到 0.1.5-rc.2，读它会误判版本不匹配）。
  *
- * 解析锚点：正在运行的 harness CLI 脚本（process.argv[1]），而【不是】
- * 插件自己的 import.meta.url——插件的 devDependencies 为编译钉着一份旧版
- * dsh-tools，以自身为锚点 require.resolve 会优先命中插件 node_modules 里
- * 的开发副本，永远量不到 harness 的真实版本（曾导致门禁静默失效）。解析
- * 结果落在插件包目录内同样视为失败（防退化守卫）。
+ * 解析锚点：正在运行的 harness CLI 脚本（process.argv[1]）所在包——从入口
+ * 脚本向上找最近的 package.json 并校验包名。全局安装
+ * （…/@deepseek-ai/dsh/lib/bin.js）与源码运行（apps/cli/src/bin.ts，`pnpm dsh`）
+ * 两种场景都落在 @deepseek-ai/dsh 的包根；而按包名 require.resolve 在源码场景
+ * 会失败（workspace 不链接自引用包名）。入口永远在 harness 侧，name 校验
+ * 兜底拒绝一切非 harness 包（含插件自身的依赖副本）。
  */
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { isAbsolute, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 /**
- * 支持下限（含）：harness 版本 < 0.1.1-rc.2 时插件拒绝加载。
- * 语义 = 插件代码实际使用的 API 面所要求的最低 harness 版本，
- * 只实测过 0.1.1-rc.2；更低的 0.1.0 线未调研，如需支持另做分析后下调。
+ * 支持窗口下限（含）：已安装 harness 版本 < 该值时拒绝加载。
+ *
+ * 窗口当前两端同为 0.1.5-rc.1（即仅支持这一个版本）——预发布线跨版本的
+ * API 破坏频繁（0.1.2-rc.1 → 0.1.5-rc.1 一次跨越就改了槽位词表、PTC 事件名与
+ * 子调用 ID、persona 段位、Session 格式 V3、attachment file 通道），版本范围
+ * 放宽救不了这类破坏，故窗口保持最窄；支持新版本时实测验证通过后手动上调
+ * MAX（MIN 保持已实测的最低版本），并同一轮同步指引文件
+ * （AGENTS.md / README.md / 本文件头注释）。差异取证手册见
+ * docs/compat-guide-0.1.2-to-0.1.5.md。
  */
-export const MIN_HARNESS_VERSION = '0.1.1-rc.2'
+export const MIN_HARNESS_VERSION = '0.1.5-rc.1'
 
 /**
- * 支持上限（含）：仅当 harness 版本 <= 0.1.2-rc.1 时插件允许加载。
- * semver 上 0.1.2-rc.x < 0.1.2 < 0.1.3-alpha.1，上限写 0.1.2-rc.1 把
- * 0.1.2 后续 tag（rc.2/正式版）与 0.1.3 线整体排除——源码 typecheck 按
- * 0.1.2-rc.1 的 API 面（0.1.2 会话视图拆分移动了 ctx.slots 类型归属，
- * 迁移记录 docs/compat-plan-0.1.2-rc.1.md）；下限 0.1.1-rc.2 保持双线：
- * 两线破坏面全在类型层、运行时面一致（docs/compat-guide-0.1.1-to-0.1.2.md）。
- * 更晚的 tag 追新验证通过后再上调。
+ * 支持窗口上限（含）：已安装 harness 版本 > 该值时拒绝加载。
+ * 只写已实测验证的 tag；追新验证通过后再上调。当前与 MIN 同值（0.1.5-rc.1）。
  */
-export const MAX_HARNESS_VERSION = '0.1.2-rc.1'
-
-/** 插件包根目录（lib/version-gate.js → ../），用于拒绝解析到自身依赖副本。 */
-const PLUGIN_ROOT = fileURLToPath(new URL('..', import.meta.url)).toLowerCase()
+export const MAX_HARNESS_VERSION = '0.1.5-rc.1'
 
 /** harness CLI 脚本路径（全局安装与源码 `pnpm dsh` 下均为 process.argv[1]）。 */
 function harnessEntry(): string {
@@ -57,26 +57,38 @@ function harnessEntry(): string {
   return isAbsolute(entry) ? entry : resolve(process.cwd(), entry)
 }
 
-/** 解析并读取 @deepseek-ai/dsh-tools 的已安装版本（= harness 版本）。 */
+/**
+ * 从 CLI 入口脚本向上找最近的 package.json——入口必在其所属包内，
+ * 第一个命中的就是 CLI 包根（与 `dsh --version` 的 readVersion 同源）。
+ */
+function harnessManifestPath(): string {
+  let dir = dirname(harnessEntry())
+  while (true) {
+    const candidate = join(dir, 'package.json')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) {
+      throw new Error(
+        'dsh-plugin-template: 无法从 harness CLI 入口向上定位 package.json'
+        + '——请确认插件运行在 dsh 托管的进程里（dsh web / dsh …），而不是独立目录。',
+      )
+    }
+    dir = parent
+  }
+}
+
+/** 读取正在运行的 harness CLI 包（@deepseek-ai/dsh）的版本。 */
 export function installedHarnessVersion(): string {
-  let manifestPath: string
-  try {
-    manifestPath = createRequire(harnessEntry()).resolve('@deepseek-ai/dsh-tools/package.json')
-  } catch (error) {
-    throw new Error(
-      'dsh-plugin-template: 无法从 harness CLI 入口解析 @deepseek-ai/dsh-tools'
-      + '——请确认插件运行在 dsh 托管的进程里（dsh web / dsh …），而不是独立目录。',
-    )
-  }
-  if (manifestPath.toLowerCase().startsWith(PLUGIN_ROOT)) {
-    throw new Error(
-      'dsh-plugin-template: @deepseek-ai/dsh-tools 解析到了插件自己的依赖副本'
-      + `（${manifestPath}），无法确定 harness 的真实版本。`,
-    )
-  }
+  const manifestPath = harnessManifestPath()
   const manifest = JSON.parse(
     readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, ''),
-  ) as { version?: unknown }
+  ) as { name?: unknown; version?: unknown }
+  if (manifest.name !== '@deepseek-ai/dsh') {
+    throw new Error(
+      'dsh-plugin-template: harness CLI 入口解析到了'
+      + ` ${String(manifest.name)}（期望 @deepseek-ai/dsh），无法确定 harness 版本。`,
+    )
+  }
   if (typeof manifest.version !== 'string' || manifest.version === '') {
     throw new Error(
       'dsh-plugin-template: 无法确定已安装的 DeepSeek Harness 版本'
@@ -88,6 +100,8 @@ export function installedHarnessVersion(): string {
 
 /**
  * 严格 semver 比较（含预发布标识，忽略 build 元数据）。
+ * 门禁的窗口判定（assertHarnessSupported）与 self-update.ts 比较插件自身
+ * npm 版本都使用本函数。
  * @returns a<b -> -1，a=b -> 0，a>b -> 1。
  */
 export function compareVersions(a: string, b: string): number {
@@ -140,7 +154,7 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-/** 版本门禁：harness 版本落在 [MIN, MAX] 窗口外时抛错（由调用方决定软禁用还是 fail-loud），否则直接返回。 */
+/** 版本门禁：已安装 harness 版本落在 [MIN, MAX] 窗口外时抛错（由调用方决定软禁用还是 fail-loud），否则直接返回。 */
 export function assertHarnessSupported(): void {
   const installed = installedHarnessVersion()
   if (compareVersions(installed, MIN_HARNESS_VERSION) < 0) {

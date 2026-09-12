@@ -8,7 +8,8 @@
 - 客户端入口：`src/client/` → 构建产物 `lib/client.js`
 - 常用命令：`pnpm run dev`（HMR 开发）、`pnpm run build`、`pnpm run typecheck`
 - 版本门禁：`src/version-gate.ts`（`[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`
-  窗口，软禁用 + client 半停用面板），追新验证通过后手动上调 MAX
+  双边界窗口——当前两端同为 0.1.5-rc.1，窗口外软禁用 + client 半停用面板），
+  追新验证通过后手动上调 MAX
 
 ## 硬约定
 
@@ -25,27 +26,40 @@
   PATH 上的 `dsh`。已知坑：pnpm 无法用 registry 版本直接覆盖 link 依赖
   （ERR_PNPM_ENOENT，且 `pnpm remove` 不删顶层 junction 残留）——link 场景先清
   残留 junction（rmSync 只删链接本体，绝不触及链接目标即源码仓库）再走官方 add。
-- **依赖名单职责分离**（双线兼容，细节与代码见 docs/compat-guide-0.1.1-to-0.1.2.md）：
-  peer = 安装期承诺（双线期写并集 `^A || ^B`）；dev = typecheck 目标（永远钉死
-  一条线，**不写并集**——pnpm 沿用 lockfile 首臂旧解析是实测坑）；
-  `dsh.client.inject` 与 tsdown `neverBundle` 只列**所有支持线都存在**的包。
-- **运行时分叉只用特征探测**：`??` 链 + 最小收窄接口，新 API 在前、旧 API 兜底；
-  禁止 import 两套再 if-else（typecheck 不可能同时过两套）；每个 fallback 分支
-  必须进旧线冒烟清单。
-- **版本窗口**：`MAX_HARNESS_VERSION` 只写已验证 tag（追新验证通过后手动上调）；
-  每次兼容迁移按 `docs/compat-plan-TEMPLATE.md` 复制一份
+- **依赖名单职责分离**（当前窗口两端同值，细节与代码见 docs/compat-guide-0.1.2-to-0.1.5.md）：
+  peer = 安装期承诺，dev = typecheck 目标，**两者写同一个 `^<唯一支持版本>`**；
+  `dsh.client.inject` 与 tsdown `neverBundle` 只列该版本存在的包。
+  不要用范围去"夹"多条 harness 线——范围放宽救不了跨 minor 线的 API 破坏，
+  跨线追新是显式手改。
+- **运行时分叉按需才做**：单窗口下**默认不要任何版本分支**（探测本身就要求
+  支持多条线，是双窗口的产物）。确需兼容两线时才用特征探测：`??` 链 + 最小
+  收窄接口，新 API 在前、旧 API 兜底；禁止 import 两套再 if-else；每个 fallback
+  分支必须进旧线冒烟清单。
+- **版本窗口**：`MAX_HARNESS_VERSION` 只写**已验证** tag（追新验证通过后手动上调）；
+  `MIN_HARNESS_VERSION` 保持已实测的最低版本（当前两端同为 0.1.5-rc.1）；
+  每次迁移按 `docs/compat-plan-TEMPLATE.md` 复制一份
   `docs/compat-plan-<目标版本>.md` 填写并保留为执行记录。
+- **指引文件随窗口同步**：harness 版本或本插件支持窗口一变，`AGENTS.md`、
+  `README.md`（"依赖版本与追新"一节）与 `src/version-gate.ts` 里所有版本表述
+  必须同一轮改掉。留着旧窗口的指引，等于让后续 agent 照旧窗口写代码——
+  四个派生插件都踩过这个坑（其中两个的 AGENTS.md 曾滞后到 0.1.1 线）。
 
 ## 版本兼容参考（写兼容代码前必读）
 
-`docs/compat-guide-0.1.1-to-0.1.2.md`：0.1.1-rc.2 ↔ 0.1.2-rc.1 两线的全部已知差异
-（breaking / normal 分级）与**带代码**的兼容方案——双线依赖清单写法（peer 并集 / dev
-钉死 / inject 与 neverBundle 名单规矩）、`import type` 迁移表、运行时特征探测范式
-（`Session.events` → `snapshotEvents()` 等）、normal changes 清单与冒烟要求。
+`docs/compat-guide-0.1.2-to-0.1.5.md`：**0.1.2-rc.1 ↔ 0.1.5-rc.1 的全部已知差异**
+（当前窗口的取证手册）——本区间是插件面破坏最大的一次跨越：槽位词表 52 → 61
+（`conversation` → `main`、`details` → `rightbar`、`conversation.details.tool` 删除）、
+PTC 事件名与子调用 ID 格式改写、system prompt 段位表重排与 persona 段拆分为
+prefix/suffix、Session 格式升 V3、attachment 新增 file 通道。含 `import type`
+迁移表、静默失效模式清单与冒烟要求。
 
-凡涉及 harness 版本兼容的工作——追新上调 `MAX_HARNESS_VERSION`、回退适配旧线、
-双线支持、判断「某 API 在别的 harness 版本上能不能用」——**先读该手册，再按其中
-§5 的操作序与 §6 的取证方法对照 harness 源码动手**；不要凭记忆写兼容代码。
+`docs/compat-guide-0.1.1-to-0.1.2.md`：0.1.1-rc.2 ↔ 0.1.2-rc.1 的差异手册，
+**已属历史**（双线窗口期的产物）。仅在确需重新引入双线支持、或排查跨 0.1.1/0.1.2
+线行为差异时查阅；其"peer 写并集 + dev 钉死一条线"的依赖写法在单窗口下不适用。
+
+凡涉及 harness 版本兼容的工作——追新上调 `MAX_HARNESS_VERSION`、判断「某 API 在别的
+harness 版本上能不能用」——**先在 `c:/deepseek-harness` 里把源码 checkout 到目标 tag
+逐 API 核实，再按 compat-guide 的取证方法动手**；不要凭记忆写兼容代码。
 
 ## DeepSeek Harness 源代码
 
@@ -54,9 +68,11 @@
 当需要查阅 DSH 的内部实现、插件 API、系统提示词组装、工具/上下文注入机制时，
 直接去该目录下阅读源码（`packages/` 为各功能包，`apps/` 为应用入口），不要凭空猜测行为。
 
-**注意签出版本**：该仓库用 tag 标记发布（如 `dsh-v0.1.2-rc.1`；本模板当前窗口
-`[0.1.1-rc.2, 0.1.2-rc.1]` 双线，typecheck 目标 0.1.2-rc.1，迁移记录见
-`docs/compat-plan-0.1.2-rc.1.md`）。
+**注意签出版本**：该仓库用 tag 标记发布。**本模板（及其派生插件）的兼容窗口是
+双边界 `[0.1.5-rc.1, 0.1.5-rc.1]`（当前两端同为 0.1.5-rc.1，即只支持这一个版本，
+不支持任何其它 harness 版本线）**；typecheck / 编译锚点 = 0.1.5-rc.1，peer 与 dev
+写同一个 `^0.1.5-rc.1`，门禁在版本出窗口时软禁用。分析与实现一律以
+`git checkout dsh-v0.1.5-rc.1` 为准；迁移记录见 `docs/compat-guide-0.1.2-to-0.1.5.md`。
 进行版本相关的兼容性分析前，先 `git -C c:/deepseek-harness describe --tags`
 确认签出的 tag 与目标 harness 版本一致，不一致先 `git fetch --tags && git checkout <tag>`——
 用旧版源码分析新版行为会得出滞后结论。

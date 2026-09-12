@@ -17,9 +17,9 @@ export const DISABLED_GLOBAL = '__DSH_PLUGIN_TEMPLATE_DISABLED__'
 /** 标记载荷：host 半给出的停用原因（含 harness 版本指引）与支持窗口。 */
 export interface DisabledFlag {
   reason: string
-  /** 支持下限（含），与 version-gate.ts 的 MIN_HARNESS_VERSION 一致。 */
+  /** 支持窗口下限（含），与 version-gate.ts 的 MIN_HARNESS_VERSION 一致。 */
   min: string
-  /** 支持上限（含），与 version-gate.ts 的 MAX_HARNESS_VERSION 一致。 */
+  /** 支持窗口上限（含），与 version-gate.ts 的 MAX_HARNESS_VERSION 一致。 */
   max: string
   /**
    * 推荐安装目标版本：固定取支持上限 MAX（窗口内最新版，升级/降级都装它），

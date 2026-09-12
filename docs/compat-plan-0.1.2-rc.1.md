@@ -1,5 +1,10 @@
 # dsh-plugin-template × DSH 0.1.2-rc.1 兼容计划（执行记录）
 
+> ⚠️ **历史归档（2026-09-12）**：本执行记录的双窗口决策已被**单窗口
+> [0.1.5-rc.1, 0.1.5-rc.1]** 取代，见派生插件任一份
+> `docs/dsh-0.1.5-rc.1-upgrade-report.md` 与本模板
+> `docs/compat-guide-0.1.2-to-0.1.5.md`。仅作历史追溯。
+
 > **结论：迁移已完成（编译级全绿）。** 依 `docs/compat-guide-0.1.1-to-0.1.2.md` 执行。
 > 本文档是 `docs/compat-plan-TEMPLATE.md` 的首次实际使用，保留为执行记录与后续追新样例。
 

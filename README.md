@@ -108,41 +108,49 @@ dsh web --patch <本模板目录>/cordis.dev.yml --port 3081
 harness 处于 0.1 rc 快速迭代期，要点：
 
 - **peer 与 dev 同一下限**：dev = 编译所用版本，peer = 运行时最低兼容声明（不强制 harness 升级，但旧环境装插件会得到 unmet peer 警告）。官方规则：every peer has a matching development range。
-- **范围写法**：用 `^0.1.1-rc.x`（下限 = 已验证版本）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。
-- **harness 版本门禁**：模板自带 `src/version-gate.ts`，要求 harness 版本落在 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]` 窗口内（MIN = 代码实际使用的 API 面要求的最低版本，与 peer 下限对应；MAX = 已验证兼容的最新版本，追新实测通过后手动上调）。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点解析 `@deepseek-ai/dsh-tools/package.json` 的已安装版本（与 harness 同版本发布；**不能**以插件自身为锚点——devDependencies 里的旧版开发副本会让解析永远命中插件自己的 node_modules，门禁静默失效）。落在窗口外默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持版本窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
+- **范围写法**：用 `^0.1.5-rc.1`（= 已实测版本，peer 与 dev 写同一个）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。
+- **harness 版本门禁（双边界窗口）**：模板自带 `src/version-gate.ts`，声明支持窗口 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`（当前两端同为 `0.1.5-rc.1`，即仅支持这一个版本），已安装版本落在窗口外即软禁用。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点，向上找最近的 `package.json` 并校验包名为 `@deepseek-ai/dsh`（CLI 包本体，`dsh --version` 同源；**不读 dsh-tools 等内嵌依赖**——它们按 caret 实装，版本可能高于 CLI 本体，实测 rc.1 的 CLI 内嵌 rc.2 的 dsh-tools，读它会误判；也不能以插件自身为锚点——devDependencies 里的开发副本会让解析永远命中插件自己的 node_modules）。版本出窗口时默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
 
 **追新流程（手动，无脚本）**：
 
-下限抬升刻意做成显式手改——目标线选择、破坏面评估、门禁 MAX 三件事本来就该人工过目；交给脚本反而会引入「当前线」的语义模糊（实测教训：`0.1.x` 线内 `0.1.1 → 0.1.2` 这种带破坏性变更的跨 patch 追新会被脚本静默扫进来，`^0.1.1-rc.2` 的 semver 语义也挡不住它自己挑的版本），并集范围、多线并存等状态更是脚本正则管不住的。追新的每一步都值得慢下来看一眼：
+版本抬升刻意做成显式手改——目标线选择、破坏面评估、门禁改值三件事本来就该人工过目；交给脚本反而会引入「当前线」的语义模糊（实测教训：`0.1.x` 线内带破坏性变更的跨 patch 追新会被脚本静默扫进来）。追新的每一步都值得慢下来看一眼：
 
 ```sh
 # ① 查目标线的最新版本（各 @deepseek-ai/dsh-* 与 harness 同步发版，查 dsh-tools 即可代表全线）：
 pnpm view @deepseek-ai/dsh-tools versions --json
 
-# ② 手改 package.json：把全部 @deepseek-ai/dsh-* 的 peer 与 dev 下限改成同一目标——
-#    单线：^0.1.2-rc.1
-#    双线并集：^0.1.1-rc.2 || ^0.1.2-rc.1（peer 写并集、dev 钉死一条线，见下节）
-#    新线才有、只 import type 的包只进 dev（旧线运行时缺席无害）
+# ② 手改 package.json：把全部 @deepseek-ai/dsh-* 的 peer 与 dev 都改成同一个目标版本
+#    （当前窗口：^0.1.5-rc.1。peer 与 dev 同值——单窗口下没有"下限/上限"之分）
+#    本版本才有的包只进 dev（只 import type 时编译期擦除）
 
 # ③ 同步与验证：
 pnpm install
 pnpm typecheck && pnpm build        # 红 = 上游破坏性变更，按 docs/compat-guide 的迁移清单修
 
-# ④ 实测通过后手动上调 src/version-gate.ts 的 MAX_HARNESS_VERSION
+# ④ 实测通过后手动上调 src/version-gate.ts 的 MAX_HARNESS_VERSION（MIN 保持已实测的最低版本）
+# ⑤ 同一轮同步指引：rg -n '0\.1\.' AGENTS.md README.md src/version-gate.ts
 ```
 
 - 不用 `pnpm update`：它会剥掉 rc 包的 `^`（实测），且不碰 peer 侧。
 - **下限 = 已验证承诺**：抬下限等于宣布「插件已在那个版本上验证过」，没实测过的版本不要抬。
 - 锁文件会钉住首次安装版本：想每次克隆都最新就删掉它，否则按上面流程主动抬下限。
 
-**双线兼容（同时支持旧线 + 新线 harness）**：
+**多线兼容（默认不做）**：
 
-本模板自身即按双线窗口 `[0.1.1-rc.2, 0.1.2-rc.1]` 发布（peer 并集 + dev 钉 0.1.2-rc.1，执行记录 `docs/compat-plan-0.1.2-rc.1.md`）。差异事实与兼容代码看 `docs/compat-guide-0.1.1-to-0.1.2.md`（0.1.1 ↔ 0.1.2 全量取证手册），执行流程照 `docs/compat-plan-TEMPLATE.md` 复制填写。要点：
+本模板与其派生插件的默认窗口是**单窗口 `[0.1.5-rc.1, 0.1.5-rc.1]`**——只支持 0.1.5-rc.1 一个版本，`peer` / `dev` 写同一个 `^0.1.5-rc.1`，代码里**不应出现任何版本分支**（`typeof ctx.x.y === 'function'` 这类探测本身就意味着要支持多条线，是双窗口的产物）。理由：预发布线跨 minor 的 API 破坏频繁（0.1.2 → 0.1.5 一次跨越就改了槽位词表、PTC 事件名、persona 段位、Session 格式），用范围"夹"多线只会把不确定性带进 typecheck。
+
+确有需要时（例如已发布插件必须同时服务两条 harness 线）才按下面的历史方法重新引入双线；一旦引入，必须在 `AGENTS.md` 与本节的窗口表述里**明确标注为双线**，不要让它悄悄变成默认。
+
+### 历史方法：双线窗口（`dsh-v0.1.1-rc.2 ↔ dsh-v0.1.2-rc.1`）
+
+单窗口下已不适用，保留作方法论参考——带代码的取证与迁移方案见 `docs/compat-guide-0.1.1-to-0.1.2.md`（peer 并集 `^0.1.1-rc.2 || ^0.1.2-rc.1` / dev 钉死一条线、`import type` 迁移表、运行时特征探测范式、normal changes 清单），执行流程照 `docs/compat-plan-TEMPLATE.md` 复制填写。要点：
 
 - 依赖写法：peer = 安装期承诺，双线写**并集** `^0.1.1-rc.2 || ^0.1.2-rc.1`；dev = typecheck 目标，**永远钉一条线**（写并集是实测坑：pnpm 沿用 lockfile 首臂旧解析，typecheck 目标混线必炸）；新线专属包只进 dev（只 `import type` 时编译期擦除，旧线运行时缺席无害）；
 - `dsh.client.inject` 与 tsdown `neverBundle` 只列**所有支持线都存在**的包——新线专属包进 inject 会让旧线 web 启动硬失败（boot graph 的 inject 是 factory 先达边，不是注释）；
 - 类型层破坏 = 迁移 `import type`（编译期擦除，运行时零分叉）；运行时破坏 = 特征探测（`??` 链 + 最小收窄接口，新 API 在前、旧 API 兜底），禁止 import 两套再 if-else；
-- 旧线兼容属推断：typecheck 只对新线一套 import 链成立，必须旧线冒烟坐实（覆盖每个探测 fallback 分支）；`MAX_HARNESS_VERSION` 只写已验证 tag；每次迁移留 `docs/compat-plan-<版本>.md` 执行记录。
+- 旧线兼容属推断：typecheck 只对新线一套 import 链成立，必须旧线冒烟坐实（覆盖每个探测 fallback 分支）；每次迁移留 `docs/compat-plan-<版本>.md` 执行记录。
+
+> 复用时注意：并集范围会让 `scripts/bump-deps.mjs`（本模板不带该脚本，四个派生插件各自带）**静默跳过**——它的范围正则是 `^\^(\d+)\.(\d+)\.(\d+)-rc\.(\d+)$`，匹配不上 `A || B`；且它只抬同 minor 线内的最新 rc，跨 minor 线永远抬不动，必须手改。
 
 ## 插件自更新
 
@@ -217,7 +225,8 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ├── src/client/TemplateSection.tsx    # 演示组件（settings.section 面板 + 插件更新条）
 ├── src/client/TemplateDisabledSection.tsx  # 版本不兼容"已停用"说明面板
 ├── src/client/TemplateSection.module.css  # 演示样式（CSS Modules + --dsw 设计令牌）
-├── docs/compat-guide-0.1.1-to-0.1.2.md     # 0.1.1↔0.1.2 兼容手册（两线差异取证 + 带代码方案）
+├── docs/compat-guide-0.1.2-to-0.1.5.md     # 当前窗口兼容手册（0.1.2↔0.1.5 差异取证 + 带代码方案）
+├── docs/compat-guide-0.1.1-to-0.1.2.md     # 历史：0.1.1↔0.1.2 兼容手册（双线期方法论参考）
 ├── docs/compat-plan-TEMPLATE.md            # 兼容迁移执行记录骨架（每次追新 cp 一份填写）
 ├── scripts/dev.mjs                   # pnpm dev：并行两个构建监视器
 ├── tsdown.config.ts                  # client bundle 构建（CJS 工厂 + 基线外部化 + CSS Modules 内联）
