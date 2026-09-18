@@ -32,21 +32,24 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 /**
  * 支持窗口下限（含）：已安装 harness 版本 < 该值时拒绝加载。
  *
- * 窗口当前两端同为 0.1.5-rc.1（即仅支持这一个版本）——预发布线跨版本的
+ * 窗口当前为 [0.1.5-rc.1, 0.1.5-rc.2]——同属 0.1.5 预发布线内的两个 tag，
+ * MIN 是已实测的最低版本，MAX 是已追新验证的最新 tag。预发布线跨版本的
  * API 破坏频繁（0.1.2-rc.1 → 0.1.5-rc.1 一次跨越就改了槽位词表、PTC 事件名与
  * 子调用 ID、persona 段位、Session 格式 V3、attachment file 通道），版本范围
- * 放宽救不了这类破坏，故窗口保持最窄；支持新版本时实测验证通过后手动上调
- * MAX（MIN 保持已实测的最低版本），并同一轮同步指引文件
+ * 放宽救不了这类破坏，故窗口只在实测验证通过后逐 tag 上调 MAX
+ * （MIN 保持已实测的最低版本），并同一轮同步指引文件
  * （AGENTS.md / README.md / 本文件头注释）。差异取证手册见
- * docs/compat-guide-0.1.2-to-0.1.5.md。
+ * docs/compat-guide-0.1.2-to-0.1.5.md；0.1.5 线内 rc.1→rc.2 为插件面零变化，
+ * 取证见 docs/compat-plan-0.1.5-rc.2.md。
  */
 export const MIN_HARNESS_VERSION = '0.1.5-rc.1'
 
 /**
  * 支持窗口上限（含）：已安装 harness 版本 > 该值时拒绝加载。
- * 只写已实测验证的 tag；追新验证通过后再上调。当前与 MIN 同值（0.1.5-rc.1）。
+ * 只写已实测验证的 tag；追新验证通过后再上调。当前为 0.1.5-rc.2
+ * （rc.1→rc.2 的区间取证：插件面零 API 变化，见 docs/compat-plan-0.1.5-rc.2.md）。
  */
-export const MAX_HARNESS_VERSION = '0.1.5-rc.1'
+export const MAX_HARNESS_VERSION = '0.1.5-rc.2'
 
 /** harness CLI 脚本路径（全局安装与源码 `pnpm dsh` 下均为 process.argv[1]）。 */
 function harnessEntry(): string {

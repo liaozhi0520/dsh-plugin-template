@@ -1,7 +1,9 @@
 # 兼容手册：DSH 0.1.2-rc.1 ↔ 0.1.5-rc.1
 
 > 定位：本模板及其派生插件（`dsh-send-to-feishu` / `dsh-qw-tool` / `dsh-post-gen` /
-> `dsh-meme-gen`）当前窗口 **单窗口 `[0.1.5-rc.1, 0.1.5-rc.1]`** 的取证手册。
+> `dsh-meme-gen`）**0.1.2-rc.1 ↔ 0.1.5 线**的取证手册。当前窗口为
+> `[0.1.5-rc.1, 0.1.5-rc.2]`；0.1.5 线内 rc.1 → rc.2 是插件面零变化的小追新，
+> 单独记录在 `docs/compat-plan-0.1.5-rc.2.md`，本文的区间破坏面结论对 rc.2 同样适用。
 > 取证方式：本地 `c:/deepseek-harness`（`git describe` = `dsh-v0.1.5-rc.1`）上对
 > `dsh-v0.1.2-rc.1..dsh-v0.1.5-rc.1`（1486 commits，2635 files，+133490/−32968）
 > 逐 API 源码核对 + GitHub Release message 交叉定位。
@@ -28,7 +30,7 @@ git -C c:/deepseek-harness rev-list --count dsh-v0.1.2-rc.1..dsh-v0.1.5-rc.1
 git -C c:/deepseek-harness diff --shortstat dsh-v0.1.2-rc.1..dsh-v0.1.5-rc.1 -- packages/<area>/src
 ```
 
-## 2. 默认依赖与门禁写法（单窗口）
+## 2. 默认依赖与门禁写法（双边界窗口）
 
 ```jsonc
 // package.json —— peer 与 dev 写同一个值
@@ -37,9 +39,9 @@ git -C c:/deepseek-harness diff --shortstat dsh-v0.1.2-rc.1..dsh-v0.1.5-rc.1 -- 
 ```
 
 ```ts
-// src/version-gate.ts —— 双边界窗口门禁（当前两端同值 = 仅支持该版本）
+// src/version-gate.ts —— 双边界窗口门禁（当前 [0.1.5-rc.1, 0.1.5-rc.2]）
 export const MIN_HARNESS_VERSION = '0.1.5-rc.1'
-export const MAX_HARNESS_VERSION = '0.1.5-rc.1'
+export const MAX_HARNESS_VERSION = '0.1.5-rc.2'
 export function assertHarnessSupported(): void {
   const installed = installedHarnessVersion()
   if (compareVersions(installed, MIN_HARNESS_VERSION) < 0) throw new Error(`…要求 harness >= ${MIN_HARNESS_VERSION}…`)
@@ -49,7 +51,7 @@ export function assertHarnessSupported(): void {
 
 要点：
 
-- 软禁用语义不变（`apply()` 捕获后 no-op + 注入停用标记），因为 0.1.5-rc.1 的
+- 软禁用语义不变（`apply()` 捕获后 no-op + 注入停用标记），因为 0.1.5-rc.2 的
   `installFailLoud` 仍 `proc.exit(1)`——插件抛错 = 整个 `dsh web` 死掉。
 - 保留 `compareVersions()`：它同时服务 `self-update.ts`（比较插件自身 npm 版本），
   不属于可删的兼容代码。
@@ -58,7 +60,7 @@ export function assertHarnessSupported(): void {
   `dsh-tools` 等内嵌依赖的版本当 harness 版本——CLI 包对内嵌依赖是 caret 语义，
   实装版本可能高于 CLI 本体（实测 `@deepseek-ai/dsh@0.1.5-rc.1` 内嵌的
   `dsh-tools` 已是 0.1.5-rc.2，读它会误判版本不匹配而软禁用）。
-- **不要写版本探测分支**：单窗口下 `typeof ctx.x.y === 'function'` 这类守卫是双窗口遗物；
+- **不要写版本探测分支**：单线下 `typeof ctx.x.y === 'function'` 这类守卫是双窗口遗物；
   全部删除（本次已从四个插件删净 `getSectionOrder` 与 `Session.events` 两处探测）。
 
 ## 3. 破坏面分级（0.1.2-rc.1 → 0.1.5-rc.1）
@@ -149,7 +151,7 @@ export function assertHarnessSupported(): void {
 - [ ] 设置面板（`settings.section`）渲染、locale 切换生效、HMR 重载后样式标签不残留；
 - [ ] 工具卡片（`tool.call.toolview`）running / settled 两态渲染，`inspect` 可用；
 - [ ] 引导段落在渲染出的系统提示词中位于工具导语区之后
-      （`order = getSectionOrder('TOOL_WORKFLOW') + 10`，0.1.5-rc.1 实测为 2610）；
+      （`order = getSectionOrder('TOOL_WORKFLOW') + 10`，0.1.5 线实测为 2610）；
 - [ ] 旧会话（0.1.2 时代）打开后，按附件 ID 引用历史图片的流程可走通
       （验证 V2→V3 迁移后 `snapshotEvents()` 仍能解析 `user/message` / `tool/result`）；
 - [ ] 临时压低 `MAX_HARNESS_VERSION` 验证软禁用路径仍生效（错误日志 + 停用面板 + `dsh web` 不退出）后改回；
@@ -160,4 +162,5 @@ export function assertHarnessSupported(): void {
 本手册是**方法论与取证**；执行层面的逐文件改动清单、决策记录（不覆盖 0.1.5-rc.2、
 `DisabledFlag` 不瘦身、母版纳入）与验收清单在
 `docs/dsh-0.1.5-rc.1-upgrade-report.md`（四个插件各一份完整副本）。
+0.1.5 线内 rc.1 → rc.2 的追新执行记录在 `docs/compat-plan-0.1.5-rc.2.md`。
 两文档不重复：报告说"改哪里"，本手册说"为什么、怎么取证、防哪些静默坑"。
