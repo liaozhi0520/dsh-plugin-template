@@ -1,6 +1,6 @@
 {
   "name": "@scoped/dsh-plugin-template",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DeepSeek Harness plugin template: host + client halves, HMR development, npm/GitHub distribution.",
   "keywords": [
     "dsh",
