@@ -12,6 +12,8 @@ export const UPDATE_ENDPOINT = {
   checkUpdate: 'template/checkUpdate',
   /** 立即更新：host 半走官方 dsh plugin add 通道安装最新版。 */
   updateSelf: 'template/updateSelf',
+  /** 启动更新检查的状态快照（apply 时检查一次；前端更新通知气泡据此轮询）。 */
+  getUpdateNotice: 'template/getUpdateNotice',
 } as const
 
 /** checkUpdate 成功主体。 */
@@ -42,4 +44,20 @@ export interface TemplateUpdateApply {
 /** 插件自更新执行结果（updateSelf 返回主体）。 */
 export type TemplateUpdateApplyResult =
   | ({ ok: true } & TemplateUpdateApply)
+  | { ok: false; error: { code: string; message?: string } }
+
+/** 启动更新检查的结论（apply 时 checkSelfUpdate 的结果快照，见 update-notice.ts）。 */
+export interface TemplateUpdateNoticeCheck {
+  /** 当前运行副本的插件版本。 */
+  currentVersion: string
+  /** npm registry 上的最新发布版本（测试桩下为固定假版本）。 */
+  latestVersion: string
+  /** latest 是否比当前新。 */
+  updateAvailable: boolean
+}
+
+/** 启动更新检查状态（getUpdateNotice 返回主体；检查在 apply 时执行一次）。 */
+export type TemplateUpdateNoticePhase = 'pending' | 'ready' | 'failed'
+export type TemplateUpdateNoticeResult =
+  | ({ ok: true; phase: TemplateUpdateNoticePhase; check?: TemplateUpdateNoticeCheck })
   | { ok: false; error: { code: string; message?: string } }

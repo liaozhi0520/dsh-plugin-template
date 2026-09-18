@@ -1,0 +1,48 @@
+/* 更新通知气泡样式（shell.overlay 全帧浮层条目；组件根元素即气泡卡片本体，
+   绝对定位于屏幕顶部居中，自身盒子之外天然 click-through）。
+   颜色一律走 harness 设计令牌（--dsw-alias-* / --dsw-shadow-*，由 ui-theme
+   按主题写到 :root），明暗主题自动跟随；禁止字面颜色。 */
+
+.bubble {
+  position: absolute;
+  /* 顶部水平居中：默认贴顶（16px）；同屏多插件堆叠时组件内联覆写 top，
+     后续气泡按 96px 步进依次向下排列（见 UpdateBubble.tsx 的 restackAll） */
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  z-index: 30;
+  box-sizing: border-box;
+  /* 宽度随内容自适应：屏宽足够时整句文案保持一行；窄屏以视口宽度封顶，
+     文本列（.text 有 min-width:0）此时正常换行 */
+  width: max-content;
+  max-width: calc(100vw - 48px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv2);
+}
+
+/* 文本列弹性占据剩余宽度并可换行（min-width:0 允许收缩），把按钮挤出固定宽 */
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 插件名加粗（与面板标题同权重） */
+.pluginName {
+  font-weight: 600;
+}
+
+/* 按钮容器禁止收缩：按钮文字保持横排一行（不会被压成竖排） */
+.actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+}

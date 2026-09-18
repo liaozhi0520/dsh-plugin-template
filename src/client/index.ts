@@ -20,12 +20,16 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: pulls the app frame's SlotMap merge (the 'shell.overlay' entry — 更新通知气泡).
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { DEMO_NS, en, zh, type TemplateDemoKey } from './locales'
 import { DISABLED_GLOBAL, type DisabledFlag } from '../shared/disabled-flag'
-import { checkUpdateViaHost, pingHost, updateSelfViaHost } from './api'
+import { checkUpdateViaHost, getUpdateNoticeViaHost, pingHost, updateSelfViaHost } from './api'
 import { TemplateSection, type TemplateSectionInjected } from './TemplateSection'
 import { TemplateDisabledSection, type TemplateDisabledSectionInjected } from './TemplateDisabledSection'
+import { UpdateBubble, type UpdateBubbleInjected } from './UpdateBubble'
 import { cssText } from './TemplateSection.module.css'
+import { cssText as updateBubbleCss } from './UpdateBubble.module.css'
 
 export const name = 'dsh-plugin-template'
 export const inject = ['slots', 'locale', 'connection']
@@ -43,13 +47,13 @@ export function apply(ctx: ClientContext): void {
   // 注册双语词典（zh/en 键集一致，注册即校验）；ctx.effect 让词典随 HMR 卸载自动撤下。
   ctx.effect(() => ctx.locale.register(DEMO_NS, { zh, en }), 'dsh-plugin-template: demo dictionaries')
 
-  // 面板样式：构建期 css-modules-inline 插件把 TemplateSection.module.css 编译成
-  // 文本内联进 bundle；这里注入 <style> 并把生命周期挂到本 fiber（HMR 卸载即移除，
-  // 重载以新 CSS 重新注入，不残留旧样式）。
+  // 面板样式：构建期 css-modules-inline 插件把 *.module.css 编译成文本内联进
+  // bundle（演示面板 + 更新气泡各一份）；这里注入 <style> 并把生命周期挂到本
+  // fiber（HMR 卸载即移除，重载以新 CSS 重新注入，不残留旧样式）。
   ctx.effect(() => {
     const tag = document.createElement('style')
     tag.dataset.plugin = name
-    tag.textContent = cssText
+    tag.textContent = `${cssText}\n${updateBubbleCss}`
     document.head.appendChild(tag)
     return () => tag.remove()
   }, 'dsh-plugin-template: demo styles')
@@ -107,6 +111,26 @@ export function apply(ctx: ClientContext): void {
         }),
       },
       TemplateSection,
+    ),
+  )
+
+  // 更新通知气泡（shell.overlay 全帧浮层条目，可加性注册）：host 半 apply 时
+  // 已启动一次性更新检查（update-notice.ts），组件挂载后轮询
+  // template/getUpdateNotice 取结论，有新版本且未被「知道了」确认时弹出顶部
+  // 居中气泡。软禁用早退路径（上方）不注册——彼时服务未注册，无 RPC 可轮询，
+  // 且停用面板已承担版本修复指引。
+  ctx.slots.inject('shell.overlay', () =>
+    ctx.slots.register(
+      {
+        name: 'shell.overlay',
+        id: 'template-update-bubble',
+        order: 100,
+        locale: DEMO_NS,
+        inject: (): UpdateBubbleInjected => ({
+          api: { getNotice: () => getUpdateNoticeViaHost(connection.rpc) },
+        }),
+      },
+      UpdateBubble,
     ),
   )
 }

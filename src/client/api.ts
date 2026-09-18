@@ -10,6 +10,9 @@ import {
   type TemplateUpdateApplyResult,
   type TemplateUpdateCheck,
   type TemplateUpdateCheckResult,
+  type TemplateUpdateNoticeCheck,
+  type TemplateUpdateNoticePhase,
+  type TemplateUpdateNoticeResult,
 } from '../shared/update-contract'
 
 export type { TemplateUpdateApply, TemplateUpdateCheck } from '../shared/update-contract'
@@ -77,4 +80,19 @@ export async function updateSelfViaHost(rpc: ClientConnectionRpc): Promise<OpRes
   if (!body || typeof body !== 'object') return { ok: false, kind: 'http', detail: 'bad result' }
   if (!body.ok) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
   return { ok: true, value: body }
+}
+
+/** 启动更新检查的状态快照（apply 时检查一次；更新通知气泡据此轮询，见 UpdateBubble.tsx）。 */
+export async function getUpdateNoticeViaHost(
+  rpc: ClientConnectionRpc,
+): Promise<OpResult<{ ok: true; phase: TemplateUpdateNoticePhase; check?: TemplateUpdateNoticeCheck }>> {
+  const result = await callTemplate<TemplateUpdateNoticeResult>(rpc, UPDATE_ENDPOINT.getUpdateNotice, {})
+  if (!result.ok) return result
+  const body = result.value
+  if (!body || typeof body !== 'object') return { ok: false, kind: 'http', detail: 'bad result' }
+  if (!body.ok) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
+  return {
+    ok: true,
+    value: { ok: true, phase: body.phase, ...(body.check !== undefined ? { check: body.check } : {}) },
+  }
 }

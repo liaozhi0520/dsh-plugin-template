@@ -17,7 +17,12 @@
  */
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import { applySelfUpdate, checkSelfUpdate } from './self-update.js'
-import type { TemplateUpdateApplyResult, TemplateUpdateCheckResult } from './shared/update-contract.js'
+import { getUpdateNoticeState } from './update-notice.js'
+import type {
+  TemplateUpdateApplyResult,
+  TemplateUpdateCheckResult,
+  TemplateUpdateNoticeResult,
+} from './shared/update-contract.js'
 
 /** ping 请求。 */
 export interface TemplatePingRequest {
@@ -38,6 +43,7 @@ export const DESCRIPTORS: InvocationDescriptor[] = (
     ['ping', ['request']],
     ['checkUpdate', []],
     ['updateSelf', []],
+    ['getUpdateNotice', []],
   ] as const
 ).map(([method, parameters]) => ({
   id: `dsh-plugin-template#template/${method}`,
@@ -87,5 +93,14 @@ export class TemplateRemote {
     } catch (error) {
       return fail('update-failed', error)
     }
+  }
+
+  /**
+   * 启动更新检查的状态快照（apply 时检查一次，见 ./update-notice.ts；前端
+   * 更新通知气泡据此轮询）。纯状态读取，不会失败，也无网络请求。
+   */
+  async getUpdateNotice(): Promise<TemplateUpdateNoticeResult> {
+    const notice = getUpdateNoticeState()
+    return { ok: true, phase: notice.phase, ...(notice.check !== undefined ? { check: notice.check } : {}) }
   }
 }

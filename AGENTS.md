@@ -26,6 +26,16 @@
   PATH 上的 `dsh`。已知坑：pnpm 无法用 registry 版本直接覆盖 link 依赖
   （ERR_PNPM_ENOENT，且 `pnpm remove` 不删顶层 junction 残留）——link 场景先清
   残留 junction（rmSync 只删链接本体，绝不触及链接目标即源码仓库）再走官方 add。
+- **启动更新通知（update-notice + UpdateBubble）**：host 半 `apply()` 经
+  `src/update-notice.ts` fire-and-forget 调 `checkSelfUpdate()`（同一官方通道），
+  结论缓存为 `pending/ready/failed` 状态机，经 `template/getUpdateNotice` 端点供
+  前端 `shell.overlay` 气泡（`client/UpdateBubble.tsx`）轮询；「知道了」确认态存
+  浏览器 localStorage（键 `dsh-update-ack:dsh-plugin-template`，值 = 已确认的
+  latest 版本号）——未确认每次打开 DSH 都弹，确认后该版本不再弹，新版本再弹；
+  检查失败折叠为 failed、前端静默放弃（apply 绝不因网络失败）；软禁用路径不注册
+  气泡（彼时无 RPC 可轮询）。多插件同屏经 `data-dsh-update-bubble` 标记全量重排
+  堆叠（首个贴顶 16px，步进 96px）。派生插件移植本功能时只改：ACK 键、locale
+  命名空间与契约类型前缀。
 - **依赖名单职责分离**（窗口内同线，细节与代码见 docs/compat-guide-0.1.2-to-0.1.5.md）：
   peer = 安装期承诺，dev = typecheck 目标，**两者写同一个 `^<已实测的最低版本>`**
   （当前 `^0.1.5-rc.1`，caret 覆盖整条 0.1.5 预发布线）；

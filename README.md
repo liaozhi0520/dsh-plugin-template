@@ -163,6 +163,16 @@ pnpm typecheck && pnpm build        # 红 = 上游破坏性变更，按 docs/com
 - **软禁用态没有更新条**：版本门禁软禁用时 host 半不注册任何端点（RPC 必然 404），停用面板只给 harness 版本修复引导——插件更新不了 harness，也不该试图更新；
 - 并发与竞态：重复点击合并进同一次安装（host 半 in-flight 锁）；点更新时 latest 回落到 ≤ 当前则归位「已是最新」；更新只换磁盘，需重启 harness 加载新 host 半。
 
+### 启动更新通知气泡
+
+host 半 `apply()` 在版本门禁通过后经 `src/update-notice.ts` fire-and-forget 调一次 `checkSelfUpdate()`（与面板「检查更新」同一实现），结论缓存为 `pending/ready/failed` 状态机；浏览器端 `client/UpdateBubble.tsx` 注册进 `shell.overlay`（AppFrame 的全帧浮层 list 槽位），挂载后轮询 `template/getUpdateNotice`（2s × 10 次，覆盖 registry 15s 超时），`updateAvailable` 且该 latest 版本未被「知道了」确认时在屏幕顶部居中弹出通知气泡：
+
+- **确认态**：浏览器 localStorage（键 `dsh-update-ack:dsh-plugin-template`，值 = 已确认的 latest 版本号）——未确认时每次打开 DSH 都会弹，确认后该版本不再弹，出现更新的新版本再次弹；
+- **多插件堆叠**：气泡带 `data-dsh-update-bubble` 标记，可见后全量重排（首个贴顶 16px，后续按 96px 依次向下），多插件同时有更新时依次排开不重叠；
+- **文案**：`发现插件 <面板标题> 新版本 <latest>（当前 <current>）…`——插件名复用 locale 词典 `title` 键并加粗，全部文案走 `locales.ts`（zh/en）；
+- **失败静默**：检查失败（离线等）折叠为 failed，前端静默放弃，不打扰用户；
+- **软禁用态没有气泡**：彼时服务未注册、无 RPC 可轮询，停用面板承担版本修复指引。
+
 ## 发布到 npm
 
 ```sh
@@ -215,6 +225,7 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ├── src/index.ts                      # host half 入口（版本门禁 + greet 工具示例 + Typert 端点注册）
 ├── src/version-gate.ts               # harness 版本门禁（软禁用语义 + CLI 锚点解析 + semver 比较）
 ├── src/self-update.ts                # 插件自更新 host 半（registry 检查 + 官方 dsh plugin add 通道）
+├── src/update-notice.ts              # 启动更新检查（apply 时一次性检查 + 状态机，复用 self-update）
 ├── src/shared/disabled-flag.ts       # host→client 的软禁用标记契约（全局变量名 + 载荷形状）
 ├── src/shared/update-contract.ts     # 自更新 RPC 契约（端点名 + 请求/结果类型，两端共用）
 ├── src/remote.ts                     # host 半 Typert 远程端点（template/*，表驱动描述符 + 第三方安全形态）
@@ -224,6 +235,8 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ├── src/client/locales.ts             # zh/en 词典（所有 UI 文案走 locale key）
 ├── src/client/api.ts                 # 浏览器 → host 的 RPC 调用（OpResult 统一错误面）
 ├── src/client/TemplateSection.tsx    # 演示组件（settings.section 面板 + 插件更新条）
+├── src/client/UpdateBubble.tsx       # 更新通知气泡（shell.overlay 条目 + 「知道了」确认态）
+├── src/client/UpdateBubble.module.css      # 气泡样式（顶部居中 + --dsw 设计令牌）
 ├── src/client/TemplateDisabledSection.tsx  # 版本不兼容"已停用"说明面板
 ├── src/client/TemplateSection.module.css  # 演示样式（CSS Modules + --dsw 设计令牌）
 ├── docs/compat-guide-0.1.2-to-0.1.5.md     # 当前窗口兼容手册（0.1.2↔0.1.5 差异取证 + 带代码方案）

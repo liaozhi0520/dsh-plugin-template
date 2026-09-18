@@ -38,6 +38,12 @@ export const en = {
   updateDoneHint: 'Restart DeepSeek Harness to load it (settings are kept).',
   updateCheckFailed: 'Check failed',
   updateFailed: 'Update failed',
+  // --- 更新通知气泡（shell.overlay 全帧浮层；apply 启动检查有新版本时弹出） ---
+  // 整句 = head + <strong>设置面板标题（title 键）</strong> + tail，插件名加粗、
+  // 左右各一个英文空格（空格由组件 JSX 补，词典不含）。
+  updateBubbleTextHead: 'A new version of plugin',
+  updateBubbleTextTail: 'is available: {latest} (current {current}). Please go to the settings panel to update.',
+  updateBubbleAck: 'Got it',
 } as const
 
 /** The template.demo namespace key union. */
@@ -70,6 +76,9 @@ export const zh: Record<TemplateDemoKey, string> = {
   updateDoneHint: '重启 DeepSeek Harness 后生效（设置会保留）。',
   updateCheckFailed: '检查失败',
   updateFailed: '更新失败',
+  updateBubbleTextHead: '发现插件',
+  updateBubbleTextTail: '新版本 {latest}（当前 {current}），请前往设置面板进行更新',
+  updateBubbleAck: '知道了',
 }
 
 /** Locale namespace owned by this plugin. */

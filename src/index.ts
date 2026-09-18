@@ -7,6 +7,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { DESCRIPTORS, TemplateRemote } from './remote.js'
 import { DISABLED_GLOBAL } from './shared/disabled-flag.js'
+import { startUpdateNoticeCheck } from './update-notice.js'
 import { assertHarnessSupported, MAX_HARNESS_VERSION, MIN_HARNESS_VERSION } from './version-gate.js'
 
 export const name = 'dsh-plugin-template'
@@ -87,6 +88,10 @@ export function apply(ctx: Context, config: Config) {
     model: { services: [], events: [], objects: [] },
     invocations: DESCRIPTORS,
   })
+
+  // 启动更新检查（fire-and-forget，见 ./update-notice.ts）：结论经
+  // template/getUpdateNotice 端点供前端气泡轮询；检查失败不影响本函数与启动。
+  startUpdateNoticeCheck()
 
   console.log(`[dsh-plugin-template] host half loaded(v2), greeting = ${JSON.stringify(config.greeting)}`)
 }
