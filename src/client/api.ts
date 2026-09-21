@@ -6,16 +6,10 @@
 import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/client'
 import {
   UPDATE_ENDPOINT,
-  type TemplateUpdateApply,
-  type TemplateUpdateApplyResult,
-  type TemplateUpdateCheck,
-  type TemplateUpdateCheckResult,
-  type TemplateUpdateNoticeCheck,
-  type TemplateUpdateNoticePhase,
-  type TemplateUpdateNoticeResult,
+  type UpdateMachineState,
 } from '../shared/update-contract'
 
-export type { TemplateUpdateApply, TemplateUpdateCheck } from '../shared/update-contract'
+export type { UpdateMachineState } from '../shared/update-contract'
 
 /** 一次远端操作的 UI 侧统一结果。 */
 export type OpResult<T> =
@@ -62,37 +56,41 @@ export async function pingHost(rpc: ClientConnectionRpc, text: string): Promise<
   return { ok: true, value: { pong: body.pong, at: body.at } }
 }
 
-/** 检查插件更新（host 半查 npm registry latest 并与运行版本比较）。 */
-export async function checkUpdateViaHost(rpc: ClientConnectionRpc): Promise<OpResult<TemplateUpdateCheck>> {
-  const result = await callTemplate<TemplateUpdateCheckResult>(rpc, UPDATE_ENDPOINT.checkUpdate, {})
+/**
+ * 读 host 半更新状态机快照（设置面板轮询与更新通知气泡共用）。
+ * host 状态机是唯一权威源（见 src/update-state.ts）：client 不持有更新状态，
+ * 失败（含旧版 host 无此端点的自举窗口）由调用方静默降级，不打断渲染。
+ */
+export async function getUpdateStateViaHost(rpc: ClientConnectionRpc): Promise<OpResult<UpdateMachineState>> {
+  const result = await callTemplate<{ ok: boolean; state?: UpdateMachineState; error?: { code?: string; message?: string } }>(
+    rpc,
+    UPDATE_ENDPOINT.getUpdateState,
+    {},
+  )
   if (!result.ok) return result
   const body = result.value
   if (!body || typeof body !== 'object') return { ok: false, kind: 'http', detail: 'bad result' }
-  if (!body.ok) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
-  return { ok: true, value: body }
+  if (!body.ok || body.state === undefined) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
+  return { ok: true, value: body.state }
 }
 
-/** 立即更新：host 半走官方 dsh plugin add 通道安装最新版（重启后 host 半生效）。 */
-export async function updateSelfViaHost(rpc: ClientConnectionRpc): Promise<OpResult<TemplateUpdateApply>> {
-  const result = await callTemplate<TemplateUpdateApplyResult>(rpc, UPDATE_ENDPOINT.updateSelf, {})
+/** 动作触发器的公共解包（checkUpdate / updateSelf 同形态：触发后快照）。 */
+function unwrapTrigger(
+  result: OpResult<{ ok: boolean; state?: UpdateMachineState; error?: { code?: string; message?: string } }>,
+): OpResult<UpdateMachineState> {
   if (!result.ok) return result
   const body = result.value
   if (!body || typeof body !== 'object') return { ok: false, kind: 'http', detail: 'bad result' }
-  if (!body.ok) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
-  return { ok: true, value: body }
+  if (!body.ok || body.state === undefined) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
+  return { ok: true, value: body.state }
 }
 
-/** 启动更新检查的状态快照（apply 时检查一次；更新通知气泡据此轮询，见 UpdateBubble.tsx）。 */
-export async function getUpdateNoticeViaHost(
-  rpc: ClientConnectionRpc,
-): Promise<OpResult<{ ok: true; phase: TemplateUpdateNoticePhase; check?: TemplateUpdateNoticeCheck }>> {
-  const result = await callTemplate<TemplateUpdateNoticeResult>(rpc, UPDATE_ENDPOINT.getUpdateNotice, {})
-  if (!result.ok) return result
-  const body = result.value
-  if (!body || typeof body !== 'object') return { ok: false, kind: 'http', detail: 'bad result' }
-  if (!body.ok) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
-  return {
-    ok: true,
-    value: { ok: true, phase: body.phase, ...(body.check !== undefined ? { check: body.check } : {}) },
-  }
+/** 触发检查更新：host 同步落 checking 后返回触发后快照，结论仍走轮询。 */
+export async function checkUpdateViaHost(rpc: ClientConnectionRpc): Promise<OpResult<UpdateMachineState>> {
+  return unwrapTrigger(await callTemplate(rpc, UPDATE_ENDPOINT.checkUpdate, {}))
+}
+
+/** 触发立即更新：host 同步落 updating 后 fire-and-forget 安装，结论走轮询。 */
+export async function updateSelfViaHost(rpc: ClientConnectionRpc): Promise<OpResult<UpdateMachineState>> {
+  return unwrapTrigger(await callTemplate(rpc, UPDATE_ENDPOINT.updateSelf, {}))
 }

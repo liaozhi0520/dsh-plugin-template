@@ -155,22 +155,23 @@ pnpm typecheck && pnpm build        # 红 = 上游破坏性变更，按 docs/com
 
 ## 插件自更新
 
-设置面板标题行右侧内置「检查更新 / 立即更新」条（client 半 `TemplateSection.tsx` 六态状态机 + host 半 `src/self-update.ts`，经 `template/checkUpdate` / `template/updateSelf` RPC）：
+设置面板标题行右侧内置「检查更新 / 立即更新」条（host 半 `src/update-state.ts` 状态机是唯一权威源，client 半 `TemplateSection.tsx` 只轮询投影；经 `template/checkUpdate` / `template/updateSelf` 触发器 RPC + `template/getUpdateState` 快照 RPC）：
 
 - **检查**：当前版本 vs npm registry `/<pkg>/latest`（严格 semver 比较，含预发布规则）；面板 mount 时静默查一次，离线不打扰、手动可重试；
-- **更新**：一律走**官方 CLI 通道** `dsh plugin --profile <name> add <pkg>@<version>`（harness 侧的官方转发器 = pnpm add + bundles reconcile，与手动安装同构）；profile 三级定位（① 包根上溯 registry 实体安装 → ② link 开发副本 realpath 反查 + 启动 argv 权威裁决 → ③ 报错给手动命令）；安装前用 `dsh plugin list --json` 交叉核对 profile 目录与依赖认领；成功后提示重启 harness 生效；
+- **更新**：一律走**官方 CLI 通道** `dsh plugin --profile <name> add <pkg>@<version>`（harness 侧的官方转发器 = pnpm add + bundles reconcile，与手动安装同构）；profile 三级定位（① 包根上溯 registry 实体安装 → ② link 开发副本 realpath 反查 + 启动 argv 权威裁决 → ③ 报错给手动命令）；安装前用 `dsh plugin list --json` 交叉核对 profile 目录与依赖认领；成功后设置面板整段替换为重启 overlay，重启 harness 后生效；
 - **前提**：插件必须已发布到 npm。GitHub-only 分发（未发 npm）时 registry 检查失败——面板静默/手动重试，属预期行为；
 - **软禁用态没有更新条**：版本门禁软禁用时 host 半不注册任何端点（RPC 必然 404），停用面板只给 harness 版本修复引导——插件更新不了 harness，也不该试图更新；
-- 并发与竞态：重复点击合并进同一次安装（host 半 in-flight 锁）；点更新时 latest 回落到 ≤ 当前则归位「已是最新」；更新只换磁盘，需重启 harness 加载新 host 半。
+- **状态机即权威**：host 半 `src/update-state.ts` 的 idle/checking/available/up-to-date/updating/updated 状态机是更新相关全部状态的唯一权威源（纯内存态、不落盘；harness 重启模块重求值即归零重查）。check/update 端点只是触发器——host 同步落相位后 fire-and-forget（浏览器刷新 / RPC 断连 / client 热更都不中断安装，重复点击合并进同一次进行中的动作）；面板与气泡一律经 `template/getUpdateState` 轮询投影。点更新时 latest 回落到 ≤ 当前则归位「已是最新」；更新只换磁盘，需重启 harness 加载新 host 半。
 
 ### 启动更新通知气泡
 
-host 半 `apply()` 在版本门禁通过后经 `src/update-notice.ts` fire-and-forget 调一次 `checkSelfUpdate()`（与面板「检查更新」同一实现），结论缓存为 `pending/ready/failed` 状态机；浏览器端 `client/UpdateBubble.tsx` 注册进 `shell.overlay`（AppFrame 的全帧浮层 list 槽位），挂载后轮询 `template/getUpdateNotice`（2s × 10 次，覆盖 registry 15s 超时），`updateAvailable` 且该 latest 版本未被「知道了」确认时在屏幕顶部居中弹出通知气泡：
+host 半 `apply()` 在版本门禁通过后启动一次静默检查（`startUpdateCheck(false)`，与面板「检查更新」走同一状态机）；浏览器端 `client/UpdateBubble.tsx` 注册进 `shell.overlay`（AppFrame 的全帧浮层 list 槽位），挂载后轮询 `template/getUpdateState`（2s × 10 次，覆盖 registry 15s 超时；idle/checking 相位与 RPC 失败继续重试），相位为 available 且该 latest 版本未被「知道了」确认时在屏幕顶部居中弹出通知气泡：
 
 - **确认态**：浏览器 localStorage（键 `dsh-update-ack:dsh-plugin-template`，值 = 已确认的 latest 版本号）——未确认时每次打开 DSH 都会弹，确认后该版本不再弹，出现更新的新版本再次弹；
 - **多插件堆叠**：气泡带 `data-dsh-update-bubble` 标记，可见后全量重排（首个贴顶 16px，后续按 96px 依次向下），多插件同时有更新时依次排开不重叠；
 - **文案**：`发现插件 <面板标题> 新版本 <latest>（当前 <current>）…`——插件名复用 locale 词典 `title` 键并加粗，全部文案走 `locales.ts`（zh/en）；
-- **失败静默**：检查失败（离线等）折叠为 failed，前端静默放弃，不打扰用户；
+- **失败静默**：启动检查失败（离线等）不打扰用户（状态机不填 errorMessage），气泡轮询耗尽即静默放弃，面板手动检查仍可用；
+- **updated 相位闭嘴**：安装完成待重启时气泡不再弹出，重启提示由设置面板的重启 overlay 承担；client 半 HMR 热更重挂后重新轮询拿到的仍是 host 权威相位；
 - **软禁用态没有气泡**：彼时服务未注册、无 RPC 可轮询，停用面板承担版本修复指引。
 
 ## 发布到 npm
@@ -225,7 +226,7 @@ Windows 下 cordis-plugin-hmr 默认的 `ignored` 含 `**/.*`，而 hmr 用 pico
 ├── src/index.ts                      # host half 入口（版本门禁 + greet 工具示例 + Typert 端点注册）
 ├── src/version-gate.ts               # harness 版本门禁（软禁用语义 + CLI 锚点解析 + semver 比较）
 ├── src/self-update.ts                # 插件自更新 host 半（registry 检查 + 官方 dsh plugin add 通道）
-├── src/update-notice.ts              # 启动更新检查（apply 时一次性检查 + 状态机，复用 self-update）
+├── src/update-state.ts               # 插件自更新状态机（host 半唯一权威源；触发器 + 轮询投影）
 ├── src/shared/disabled-flag.ts       # host→client 的软禁用标记契约（全局变量名 + 载荷形状）
 ├── src/shared/update-contract.ts     # 自更新 RPC 契约（端点名 + 请求/结果类型，两端共用）
 ├── src/remote.ts                     # host 半 Typert 远程端点（template/*，表驱动描述符 + 第三方安全形态）

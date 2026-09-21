@@ -24,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { DEMO_NS, en, zh, type TemplateDemoKey } from './locales'
 import { DISABLED_GLOBAL, type DisabledFlag } from '../shared/disabled-flag'
-import { checkUpdateViaHost, getUpdateNoticeViaHost, pingHost, updateSelfViaHost } from './api'
+import { checkUpdateViaHost, getUpdateStateViaHost, pingHost, updateSelfViaHost } from './api'
 import { TemplateSection, type TemplateSectionInjected } from './TemplateSection'
 import { TemplateDisabledSection, type TemplateDisabledSectionInjected } from './TemplateDisabledSection'
 import { UpdateBubble, type UpdateBubbleInjected } from './UpdateBubble'
@@ -105,6 +105,7 @@ export function apply(ctx: ClientContext): void {
         inject: (): TemplateSectionInjected => ({
           api: {
             ping: (text) => pingHost(connection.rpc, text),
+            getUpdateState: () => getUpdateStateViaHost(connection.rpc),
             checkUpdate: () => checkUpdateViaHost(connection.rpc),
             updateSelf: () => updateSelfViaHost(connection.rpc),
           },
@@ -114,11 +115,12 @@ export function apply(ctx: ClientContext): void {
     ),
   )
 
-  // 更新通知气泡（shell.overlay 全帧浮层条目，可加性注册）：host 半 apply 时
-  // 已启动一次性更新检查（update-notice.ts），组件挂载后轮询
-  // template/getUpdateNotice 取结论，有新版本且未被「知道了」确认时弹出顶部
-  // 居中气泡。软禁用早退路径（上方）不注册——彼时服务未注册，无 RPC 可轮询，
-  // 且停用面板已承担版本修复指引。
+  // 更新通知气泡（shell.overlay 全帧浮层条目，可加性注册）：host 半的更新
+  // 状态机是唯一权威源（update-state.ts，apply 时已启动静默检查），组件挂载
+  // 后轮询 template/getUpdateState 取快照，有新版本且未被「知道了」确认时
+  // 弹出顶部居中气泡；updated（已装待重启）相位闭嘴，重启提示由设置面板
+  // overlay 承担。软禁用早退路径（上方）不注册——彼时服务未注册，无 RPC 可
+  // 轮询，且停用面板已承担版本修复指引。
   ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register(
       {
@@ -127,7 +129,7 @@ export function apply(ctx: ClientContext): void {
         order: 100,
         locale: DEMO_NS,
         inject: (): UpdateBubbleInjected => ({
-          api: { getNotice: () => getUpdateNoticeViaHost(connection.rpc) },
+          api: { getUpdateState: () => getUpdateStateViaHost(connection.rpc) },
         }),
       },
       UpdateBubble,

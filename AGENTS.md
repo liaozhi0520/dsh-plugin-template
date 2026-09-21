@@ -26,15 +26,22 @@
   PATH 上的 `dsh`。已知坑：pnpm 无法用 registry 版本直接覆盖 link 依赖
   （ERR_PNPM_ENOENT，且 `pnpm remove` 不删顶层 junction 残留）——link 场景先清
   残留 junction（rmSync 只删链接本体，绝不触及链接目标即源码仓库）再走官方 add。
-- **启动更新通知（update-notice + UpdateBubble）**：host 半 `apply()` 经
-  `src/update-notice.ts` fire-and-forget 调 `checkSelfUpdate()`（同一官方通道），
-  结论缓存为 `pending/ready/failed` 状态机，经 `template/getUpdateNotice` 端点供
-  前端 `shell.overlay` 气泡（`client/UpdateBubble.tsx`）轮询；「知道了」确认态存
-  浏览器 localStorage（键 `dsh-update-ack:dsh-plugin-template`，值 = 已确认的
-  latest 版本号）——未确认每次打开 DSH 都弹，确认后该版本不再弹，新版本再弹；
-  检查失败折叠为 failed、前端静默放弃（apply 绝不因网络失败）；软禁用路径不注册
-  气泡（彼时无 RPC 可轮询）。多插件同屏经 `data-dsh-update-bubble` 标记全量重排
-  堆叠（首个贴顶 16px，步进 96px）。派生插件移植本功能时只改：ACK 键、locale
+- **插件自更新状态机（update-state + UpdateBubble）**：host 半 `src/update-state.ts`
+  的 idle/checking/available/up-to-date/updating/updated 状态机是更新相关全部
+  状态的**唯一权威源**（模块级内存态，**不落盘**；harness 重启 → 模块重求值 →
+  归零重查，"待重启"状态随重启自然消失）。`template/checkUpdate` /
+  `template/updateSelf` RPC 只是**触发器**——host 同步落相位后立即返回触发后
+  快照，检查/安装在 host 内 fire-and-forget 跑完（浏览器刷新 / RPC 断连 /
+  client 热更都不中断安装）；设置面板与 `client/UpdateBubble.tsx` 气泡一律经
+  `template/getUpdateState` 轮询投影快照（client 半不持有更新状态——自更新安装
+  会改写 lib/client.js 触发 client-hmr 重挂，状态若留在 client 会随热更消失）。
+  updated（已装待重启）相位：设置面板整段替换为重启 overlay，气泡闭嘴。
+  「知道了」确认态存浏览器 localStorage（键 `dsh-update-ack:dsh-plugin-template`，
+  值 = 已确认的 latest 版本号）——未确认每次打开 DSH 都弹，确认后该版本不再弹，
+  新版本再弹。启动检查（apply 时 `startUpdateCheck(false)`）失败静默（不填
+  errorMessage，不打扰用户）；软禁用路径不注册气泡（彼时无 RPC 可轮询）。
+  多插件同屏经 `data-dsh-update-bubble` 标记全量重排堆叠（首个贴顶 16px，
+  步进 96px）。派生插件移植本功能时只改：ACK 键、console 前缀、locale
   命名空间与契约类型前缀。
 - **依赖名单职责分离**（窗口内同线，细节与代码见 docs/compat-guide-0.1.2-to-0.1.5.md）：
   peer = 安装期承诺，dev = typecheck 目标，**两者写同一个 `^<已实测的最低版本>`**

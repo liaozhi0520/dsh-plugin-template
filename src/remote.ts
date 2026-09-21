@@ -16,12 +16,10 @@
  * 同名方法。codec 一律 src-json（仅 JSON 安全检查），边界校验在服务方法内。
  */
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-import { applySelfUpdate, checkSelfUpdate } from './self-update.js'
-import { getUpdateNoticeState } from './update-notice.js'
+import { getUpdateMachineState, startSelfUpdate, startUpdateCheck } from './update-state.js'
 import type {
-  TemplateUpdateApplyResult,
-  TemplateUpdateCheckResult,
-  TemplateUpdateNoticeResult,
+  UpdateActionResult,
+  UpdateStateResult,
 } from './shared/update-contract.js'
 
 /** ping 请求。 */
@@ -43,7 +41,7 @@ export const DESCRIPTORS: InvocationDescriptor[] = (
     ['ping', ['request']],
     ['checkUpdate', []],
     ['updateSelf', []],
-    ['getUpdateNotice', []],
+    ['getUpdateState', []],
   ] as const
 ).map(([method, parameters]) => ({
   id: `dsh-plugin-template#template/${method}`,
@@ -54,11 +52,6 @@ export const DESCRIPTORS: InvocationDescriptor[] = (
   parameters: parameters.map((name) => ({ name, wire: name, source: 'json' as const, codec: { mode: 'src-json' as const } })),
   result: { mode: 'src-json' as const },
 }))
-
-/** 服务方法失败的统一折叠（code 由调用点给：check-failed / update-failed）。 */
-function fail(code: string, error: unknown): { ok: false; error: { code: string; message: string } } {
-  return { ok: false, error: { code, message: error instanceof Error ? error.message : String(error) } }
-}
 
 /**
  * 远程服务（纯数据对象）：Gateway 分发只要求结构合法的
@@ -77,30 +70,35 @@ export class TemplateRemote {
     return { ok: true, pong: text, at: Date.now() }
   }
 
-  /** 检查更新：当前版本 vs npm registry latest（实现见 self-update.ts）。 */
-  async checkUpdate(): Promise<TemplateUpdateCheckResult> {
-    try {
-      return { ok: true, ...(await checkSelfUpdate()) }
-    } catch (error) {
-      return fail('check-failed', error)
-    }
-  }
+  // -----------------------------------------------------------------------
+  // RPC 端点：插件自更新（状态机在 ./update-state.ts，host 半唯一权威源；
+  // 本类只是触发器 + 快照读取，不持有状态）。
+  // -----------------------------------------------------------------------
 
-  /** 立即更新：经官方 dsh plugin add 通道安装最新版（重复调用合并）。 */
-  async updateSelf(): Promise<TemplateUpdateApplyResult> {
-    try {
-      return { ok: true, ...(await applySelfUpdate()) }
-    } catch (error) {
-      return fail('update-failed', error)
-    }
+  /**
+   * 检查更新触发器：同步把状态机落为 checking 后立即返回触发后快照，
+   * registry 往返在 host 内异步完成；结论经 getUpdateState 轮询透出。
+   */
+  async checkUpdate(): Promise<UpdateActionResult> {
+    startUpdateCheck(true)
+    return { ok: true, state: getUpdateMachineState() }
   }
 
   /**
-   * 启动更新检查的状态快照（apply 时检查一次，见 ./update-notice.ts；前端
-   * 更新通知气泡据此轮询）。纯状态读取，不会失败，也无网络请求。
+   * 立即更新触发器：同步把状态机落为 updating 后立即返回；安装
+   * fire-and-forget 在 host 内跑完（浏览器刷新 / RPC 断连不中断），
+   * 重复调用合并进同一次安装。
    */
-  async getUpdateNotice(): Promise<TemplateUpdateNoticeResult> {
-    const notice = getUpdateNoticeState()
-    return { ok: true, phase: notice.phase, ...(notice.check !== undefined ? { check: notice.check } : {}) }
+  async updateSelf(): Promise<UpdateActionResult> {
+    startSelfUpdate()
+    return { ok: true, state: getUpdateMachineState() }
+  }
+
+  /**
+   * 更新状态机快照（设置面板与更新通知气泡的唯一读通道）。
+   * 纯状态读取，不会失败，也无网络请求。
+   */
+  async getUpdateState(): Promise<UpdateStateResult> {
+    return { ok: true, state: getUpdateMachineState() }
   }
 }

@@ -136,8 +136,8 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* 详情行：完整错误输出（含 dsh plugin add 输出尾部的多行文本）/ 更新成功的
-   重启提示。pre-wrap 保留换行、超长纵向滚动、文本可选中复制。
+/* 详情行：完整错误输出（含 dsh plugin add 输出尾部的多行文本）。
+   pre-wrap 保留换行、超长纵向滚动、文本可选中复制。
    .section 自带 16px padding，详情行负 margin 贴近更新条。 */
 .updateDetail {
   margin: -6px 0 0;
@@ -152,12 +152,34 @@
   user-select: text;
 }
 
-.updateDetailOk {
-  color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
 .updateDetailError {
   color: var(--dsw-alias-state-error-primary);
   background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+/* 安装完成待重启的整段 overlay（updated 相位时替换面板全部内容）。 */
+.restartOverlay {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.restartOverlayTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.restartOverlayText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 420px;
+  color: var(--dsw-alias-label-secondary);
 }

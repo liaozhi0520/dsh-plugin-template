@@ -26,7 +26,7 @@ export const en = {
   pinging: 'Pinging…',
   pingResult: 'Host answered "{pong}" at {at}',
   pingFailed: 'Ping failed: {message}',
-  // --- 插件自更新（标题右侧紧凑更新条；长文案走标题行下详情行） ---
+  // --- 插件自更新（标题右侧紧凑更新条 + updated 相位的重启 overlay） ---
   updateVersion: 'v{version}',
   updateCheck: 'Check for updates',
   updateChecking: 'Checking…',
@@ -34,8 +34,8 @@ export const en = {
   updateAvailable: 'New version {version}',
   updateApply: 'Update now',
   updateApplying: 'Updating…',
-  updateDoneShort: 'Updated to {version}',
-  updateDoneHint: 'Restart DeepSeek Harness to load it (settings are kept).',
+  updateOverlayTitle: 'Plugin updated to {version}',
+  updateOverlayHint: 'Restart DeepSeek Harness to load the new version — continuing to run without restarting may cause unexpected behavior.',
   updateCheckFailed: 'Check failed',
   updateFailed: 'Update failed',
   // --- 更新通知气泡（shell.overlay 全帧浮层；apply 启动检查有新版本时弹出） ---
@@ -72,8 +72,8 @@ export const zh: Record<TemplateDemoKey, string> = {
   updateAvailable: '新版本 {version}',
   updateApply: '立即更新',
   updateApplying: '更新中…',
-  updateDoneShort: '已更新到 {version}',
-  updateDoneHint: '重启 DeepSeek Harness 后生效（设置会保留）。',
+  updateOverlayTitle: '插件已更新到 {version}',
+  updateOverlayHint: '请重启DeepSeek harness，使插件新版本生效，否则若继续运行，可能会出现异常情况',
   updateCheckFailed: '检查失败',
   updateFailed: '更新失败',
   updateBubbleTextHead: '发现插件',
