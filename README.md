@@ -108,8 +108,8 @@ dsh web --patch <本模板目录>/cordis.dev.yml --port 3081
 harness 处于 0.1 rc 快速迭代期，要点：
 
 - **peer 与 dev 同一下限**：dev = 编译所用版本，peer = 运行时最低兼容声明（不强制 harness 升级，但旧环境装插件会得到 unmet peer 警告）。官方规则：every peer has a matching development range。
-- **范围写法**：用 `^0.1.5-rc.1`（= 已实测的最低版本，peer 与 dev 写同一个）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。caret 在预发布线上只覆盖同一 `major.minor.patch` 的更高预发布号，所以 `^0.1.5-rc.1` 恰好等于 `{0.1.5-rc.1, 0.1.5-rc.2}`——**追新到 0.1.5 线内的新 rc 不需要改依赖，只抬 MAX**（跨 minor 线才需要手改依赖）。
-- **harness 版本门禁（双边界窗口）**：模板自带 `src/version-gate.ts`，声明支持窗口 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`（当前为 `[0.1.5-rc.1, 0.1.5-rc.2]`），已安装版本落在窗口外即软禁用。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点，向上找最近的 `package.json` 并校验包名为 `@deepseek-ai/dsh`（CLI 包本体，`dsh --version` 同源；**不读 dsh-tools 等内嵌依赖**——它们按 caret 实装，版本可能高于 CLI 本体，实测 rc.1 的 CLI 内嵌 rc.2 的 dsh-tools，读它会误判；也不能以插件自身为锚点——devDependencies 里的开发副本会让解析永远命中插件自己的 node_modules）。版本出窗口时默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
+- **范围写法**：用 `^0.1.5-rc.1`（= 已实测的最低版本，peer 与 dev 写同一个）。不要用 `latest`/`*`（dist-tag 停在老线，反而拿到最旧），也不要用精确钉死（`pnpm add` 默认写死，永不移动）。caret 在预发布线上只覆盖同一 `major.minor.patch` 的更高预发布号，所以 `^0.1.5-rc.1` 恰好等于 0.1.5 线内全部预发布号的并集 `{0.1.5-rc.1, 0.1.5-rc.2, 0.1.5-rc.3}`——**追新到 0.1.5 线内的新 rc 不需要改依赖，只抬 MAX**（跨 minor 线才需要手改依赖）。
+- **harness 版本门禁（双边界窗口）**：模板自带 `src/version-gate.ts`，声明支持窗口 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`（当前为 `[0.1.5-rc.1, 0.1.5-rc.3]`），已安装版本落在窗口外即软禁用。`dsh plugin add` 只是 pnpm 转发器，安装期没有插件版本检查钩子，所以门禁放在插件 apply 时执行：以 harness CLI 入口（`process.argv[1]`）为锚点，向上找最近的 `package.json` 并校验包名为 `@deepseek-ai/dsh`（CLI 包本体，`dsh --version` 同源；**不读 dsh-tools 等内嵌依赖**——它们按 caret 实装，版本可能高于 CLI 本体，实测 rc.1 的 CLI 内嵌 rc.2 的 dsh-tools，读它会误判；也不能以插件自身为锚点——devDependencies 里的开发副本会让解析永远命中插件自己的 node_modules）。版本出窗口时默认**软禁用**：醒目错误日志 + 插件不注册任何业务能力，不影响 dsh web 启动（Loader/app-boot 对插件抛错零容忍，抛错 = 整个 harness exit(1)）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。软禁用时 host 半经 `webserver/index-inject` 向页面注入 `__DSH_PLUGIN_TEMPLATE_DISABLED__` 标记（fiber-bound，卸载即撤、无残留），client 半读到后改挂"已停用"说明面板并展示支持窗口（`src/shared/disabled-flag.ts` 是两侧共享的标记契约）。
 
 **追新流程（手动，无脚本）**：
 
@@ -138,7 +138,7 @@ pnpm typecheck && pnpm build        # 红 = 上游破坏性变更，按 docs/com
 
 **多线兼容（默认不做）**：
 
-本模板与其派生插件的默认窗口是**`[0.1.5-rc.1, 0.1.5-rc.2]`**——同属 0.1.5 预发布线（MIN 是已实测的最低版本，MAX 是已追新验证的最新 tag），`peer` / `dev` 写同一个 `^0.1.5-rc.1`，代码里**不应出现任何版本分支**（`typeof ctx.x.y === 'function'` 这类探测本身就意味着要支持多条线，是双窗口的产物）。理由：预发布线跨 minor 的 API 破坏频繁（0.1.2 → 0.1.5 一次跨越就改了槽位词表、PTC 事件名、persona 段位、Session 格式），用范围"夹"多线只会把不确定性带进 typecheck。
+本模板与其派生插件的默认窗口是**`[0.1.5-rc.1, 0.1.5-rc.3]`**——同属 0.1.5 预发布线（MIN 是已实测的最低版本，MAX 是已追新验证的最新 tag），`peer` / `dev` 写同一个 `^0.1.5-rc.1`，代码里**不应出现任何版本分支**（`typeof ctx.x.y === 'function'` 这类探测本身就意味着要支持多条线，是双窗口的产物）。理由：预发布线跨 minor 的 API 破坏频繁（0.1.2 → 0.1.5 一次跨越就改了槽位词表、PTC 事件名、persona 段位、Session 格式），用范围"夹"多线只会把不确定性带进 typecheck。
 
 确有需要时（例如已发布插件必须同时服务两条 harness 线）才按下面的历史方法重新引入双线；一旦引入，必须在 `AGENTS.md` 与本节的窗口表述里**明确标注为双线**，不要让它悄悄变成默认。
 

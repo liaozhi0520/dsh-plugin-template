@@ -8,7 +8,7 @@
 - 客户端入口：`src/client/` → 构建产物 `lib/client.js`
 - 常用命令：`pnpm run dev`（HMR 开发）、`pnpm run build`、`pnpm run typecheck`
 - 版本门禁：`src/version-gate.ts`（`[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`
-  双边界窗口——当前为 `[0.1.5-rc.1, 0.1.5-rc.2]`，窗口外软禁用 + client 半停用面板），
+  双边界窗口——当前为 `[0.1.5-rc.1, 0.1.5-rc.3]`，窗口外软禁用 + client 半停用面板），
   追新验证通过后手动上调 MAX
 
 ## 硬约定
@@ -55,7 +55,7 @@
   分支必须进旧线冒烟清单。
 - **版本窗口**：`MAX_HARNESS_VERSION` 只写**已验证** tag（追新验证通过后手动上调）；
   `MIN_HARNESS_VERSION` 保持已实测的最低版本（当前窗口为
-  `[0.1.5-rc.1, 0.1.5-rc.2]`——MIN 仍是 0.1.5-rc.1）；
+  `[0.1.5-rc.1, 0.1.5-rc.3]`——MIN 仍是 0.1.5-rc.1）；
   每次迁移按 `docs/compat-plan-TEMPLATE.md` 复制一份
   `docs/compat-plan-<目标版本>.md` 填写并保留为执行记录。
 - **指引文件随窗口同步**：harness 版本或本插件支持窗口一变，`AGENTS.md`、
@@ -88,13 +88,13 @@ harness 版本上能不能用」——**先在 `c:/deepseek-harness` 里把源�
 直接去该目录下阅读源码（`packages/` 为各功能包，`apps/` 为应用入口），不要凭空猜测行为。
 
 **注意签出版本**：该仓库用 tag 标记发布。**本模板（及其派生插件）的兼容窗口是
-双边界 `[0.1.5-rc.1, 0.1.5-rc.2]`（MIN = 已实测的最低版本 0.1.5-rc.1，
-MAX = 已追新验证的最新 tag 0.1.5-rc.2，同属 0.1.5 预发布线）**；
-typecheck / 编译锚点 = 0.1.5-rc.2，peer 与 dev 写同一个 `^0.1.5-rc.1`
-（caret 恰好覆盖 `{rc.1, rc.2}`），门禁在版本出窗口时软禁用。分析与实现一律以
-`git checkout dsh-v0.1.5-rc.2` 为准；跨线迁移记录见
-`docs/compat-guide-0.1.2-to-0.1.5.md`，0.1.5 线内 rc.1→rc.2 追新记录见
-`docs/compat-plan-0.1.5-rc.2.md`。
+双边界 `[0.1.5-rc.1, 0.1.5-rc.3]`（MIN = 已实测的最低版本 0.1.5-rc.1，
+MAX = 已追新验证的最新 tag 0.1.5-rc.3，同属 0.1.5 预发布线）**；
+typecheck / 编译锚点 = 0.1.5-rc.3，peer 与 dev 写同一个 `^0.1.5-rc.1`
+（caret 恰好覆盖 `{rc.1, rc.2, rc.3}`），门禁在版本出窗口时软禁用。分析与实现一律以
+`git checkout dsh-v0.1.5-rc.3` 为准；跨线迁移记录见
+`docs/compat-guide-0.1.2-to-0.1.5.md`，0.1.5 线内 rc.1→rc.2、rc.2→rc.3 追新记录见
+`docs/compat-plan-0.1.5-rc.2.md` 与 `docs/compat-plan-0.1.5-rc.3.md`。
 进行版本相关的兼容性分析前，先 `git -C c:/deepseek-harness describe --tags`
 确认签出的 tag 与目标 harness 版本一致，不一致先 `git fetch --tags && git checkout <tag>`——
 用旧版源码分析新版行为会得出滞后结论。

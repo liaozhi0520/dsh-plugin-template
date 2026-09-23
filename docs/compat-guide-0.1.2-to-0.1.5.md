@@ -2,8 +2,9 @@
 
 > 定位：本模板及其派生插件（`dsh-send-to-feishu` / `dsh-qw-tool` / `dsh-post-gen` /
 > `dsh-meme-gen`）**0.1.2-rc.1 ↔ 0.1.5 线**的取证手册。当前窗口为
-> `[0.1.5-rc.1, 0.1.5-rc.2]`；0.1.5 线内 rc.1 → rc.2 是插件面零变化的小追新，
-> 单独记录在 `docs/compat-plan-0.1.5-rc.2.md`，本文的区间破坏面结论对 rc.2 同样适用。
+> `[0.1.5-rc.1, 0.1.5-rc.3]`；0.1.5 线内 rc.1 → rc.2、rc.2 → rc.3 均是插件面
+> 零变化的小追新，分别记录在 `docs/compat-plan-0.1.5-rc.2.md` 与
+> `docs/compat-plan-0.1.5-rc.3.md`，本文的区间破坏面结论对 rc.2/rc.3 同样适用。
 > 取证方式：本地 `c:/deepseek-harness`（`git describe` = `dsh-v0.1.5-rc.1`）上对
 > `dsh-v0.1.2-rc.1..dsh-v0.1.5-rc.1`（1486 commits，2635 files，+133490/−32968）
 > 逐 API 源码核对 + GitHub Release message 交叉定位。
@@ -39,9 +40,9 @@ git -C c:/deepseek-harness diff --shortstat dsh-v0.1.2-rc.1..dsh-v0.1.5-rc.1 -- 
 ```
 
 ```ts
-// src/version-gate.ts —— 双边界窗口门禁（当前 [0.1.5-rc.1, 0.1.5-rc.2]）
+// src/version-gate.ts —— 双边界窗口门禁（当前 [0.1.5-rc.1, 0.1.5-rc.3]）
 export const MIN_HARNESS_VERSION = '0.1.5-rc.1'
-export const MAX_HARNESS_VERSION = '0.1.5-rc.2'
+export const MAX_HARNESS_VERSION = '0.1.5-rc.3'
 export function assertHarnessSupported(): void {
   const installed = installedHarnessVersion()
   if (compareVersions(installed, MIN_HARNESS_VERSION) < 0) throw new Error(`…要求 harness >= ${MIN_HARNESS_VERSION}…`)
@@ -51,7 +52,7 @@ export function assertHarnessSupported(): void {
 
 要点：
 
-- 软禁用语义不变（`apply()` 捕获后 no-op + 注入停用标记），因为 0.1.5-rc.2 的
+- 软禁用语义不变（`apply()` 捕获后 no-op + 注入停用标记），因为 0.1.5-rc.2/rc.3 的
   `installFailLoud` 仍 `proc.exit(1)`——插件抛错 = 整个 `dsh web` 死掉。
 - 保留 `compareVersions()`：它同时服务 `self-update.ts`（比较插件自身 npm 版本），
   不属于可删的兼容代码。
@@ -162,5 +163,6 @@ export function assertHarnessSupported(): void {
 本手册是**方法论与取证**；执行层面的逐文件改动清单、决策记录（不覆盖 0.1.5-rc.2、
 `DisabledFlag` 不瘦身、母版纳入）与验收清单在
 `docs/dsh-0.1.5-rc.1-upgrade-report.md`（四个插件各一份完整副本）。
-0.1.5 线内 rc.1 → rc.2 的追新执行记录在 `docs/compat-plan-0.1.5-rc.2.md`。
+0.1.5 线内 rc.1 → rc.2、rc.2 → rc.3 的追新执行记录分别在
+`docs/compat-plan-0.1.5-rc.2.md` 与 `docs/compat-plan-0.1.5-rc.3.md`。
 两文档不重复：报告说"改哪里"，本手册说"为什么、怎么取证、防哪些静默坑"。
