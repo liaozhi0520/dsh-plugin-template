@@ -97,3 +97,26 @@ argv 为空、`npm_package_version` 已是新值；`pnpm run version` 只直跑�
 `pnpm add <pkg>@<version>` 对现存 link（junction）报 ERR_PNPM_ENOENT，且
 `pnpm remove` 不删顶层 junction 残留——先把链接本体删掉（rmSync 只删链接，
 绝不触及链接目标即源码仓库）再走全新安装。开发态装/卸本插件时同理。
+
+## 12. 从范式仓移植「带硬编码 scope」的脚本时，鉴权路径可能从未被验证过
+
+test-version-bump.mjs 移植自范式仓，其 verdaccio 配置的 packages 段曾硬编码
+`'@liaozhi/**': publish: $all`——范式插件发布**根本不走鉴权**，所以配套的
+legacy `username/_password` npmrc 在范式仓从未被真正校验过；换 scope 后本插件
+落进 `'**'` 的 `publish: $authenticated`，而新版 npm 对 npmrc 的
+`username/_password` 形态不会自动发 Basic（实测 401 "need: Basic, Bearer"，
+npm 侧自报 HttpErrorAuthUnknown）→ E401。
+
+教训与修法（scripts/test-version-bump.mjs）：
+- **scope 模式从包名动态推导**（`verdaccioConfigFor(manifest.name)`），不写死
+  任何 scope；scope 块 publish/unpublish $all 与范式同款（本地一次性测试源，
+  发布不依赖鉴权）；
+- **发布凭据用 Bearer `_authToken`**：verdaccio 就绪后用 Basic 凭据 PUT
+  `/-/user/org.couchdb.user:<user>` 换 JWT 写进 npmrc（`mintPublishToken`）——
+  `_authToken` 是 npm 全版本都认的形态；mint 失败仅警告不阻断（scope 块 $all
+  兜底）。验证探针：legacy 凭据 + $all 发布 ✓、token mint 201 ✓、whoami=test ✓、
+  _authToken 发布 ✓。
+
+通用规则：移植任何「按假设的包名/scope/路径生成配置」的脚本，先把假设参数化，
+再追问——**原仓库里这条路径真的被执行过吗**（publish: $all 会让鉴权代码变成
+从未运行的死角）。

@@ -77,7 +77,19 @@ const INJECTED_CANDIDATES = "['http://127.0.0.1:4873', 'https://registry.npmjs.o
 /** 前置条件不成立（本次不可测、未做任何改动）时的退出码。 */
 const EXIT_PRECONDITION = 2
 
-const VERDACCIO_CONFIG = `# 由 scripts/test-version-bump.mjs 每次运行时生成（勿手改，测试后随文件夹一起删）。
+/**
+ * Verdaccio 配置（每次运行时生成）。本插件 scope 的 packages 块**按包名动态
+ * 推导**——范式仓曾硬编码 '@liaozhi/**'，换 scope 后本插件会落进 '**' 的
+ * `publish: $authenticated`，而 publish.npmrc 的 legacy username/_password
+ * 形态在新版 npm 下不会自动发 Basic（实测 E401 "need: Basic, Bearer"）。
+ * scope 块 publish/unpublish 开 $all 与范式同款：本地一次性测试源，发布/
+ * 反发布不走鉴权；'**' 兜底仍要求鉴权（Bearer token mint 见 mintPublishToken）。
+ */
+function verdaccioConfigFor(pkgName) {
+  const scopeBlock = pkgName.startsWith('@')
+    ? `  '${pkgName.split('/')[0]}/**':\n    access: $all\n    publish: $all\n    unpublish: $all\n`
+    : ''
+  return `# 由 scripts/test-version-bump.mjs 每次运行时生成（勿手改，测试后随文件夹一起删）。
 storage: ./.verdaccio-storage
 listen: 127.0.0.1:4873
 web:
@@ -90,11 +102,7 @@ uplinks:
   npmjs:
     url: https://registry.npmjs.org/
 packages:
-  '@liaozhi/**':
-    access: $all
-    publish: $all
-    unpublish: $all
-  '**':
+${scopeBlock}  '**':
     access: $all
     publish: $authenticated
     proxy: npmjs
@@ -102,6 +110,7 @@ middlewares:
   audit:
     enabled: false
 `
+}
 
 /** 测试账号：verdaccio 只监听 127.0.0.1，凭据只落在 git-ignored 目录。 */
 const TEST_USER = 'test'
@@ -441,13 +450,15 @@ function patchRegistrySource(inject, baseDir = ROOT) {
  * 生成 htpasswd（test 用户）与发布用 npmrc。bcrypt 复用 verdaccio 依赖树里的
  * bcryptjs（verdaccio-htpasswd 的校验实现），不在 package.json 增加依赖。
  *
- * 两个资产**各自独立判断**：npmrc 无条件重写（确定性生成、极小）——曾因
- * 「htpasswd 已存在 → 早退」把 npmrc 生成一起跳过，导致 --userconfig 指向
- * 不存在的文件、npm 静默视为无凭据（ENEEDAUTH）。
+ * 两个资产**各自独立判断**：htpasswd 存在即复用（密码固定，跨运行哈希一致）；
+ * npmrc 无条件重写（确定性生成、极小）——曾因「htpasswd 已存在 → 早退」把
+ * npmrc 生成一起跳过，导致 --userconfig 指向不存在的文件、npm 静默视为无凭据。
+ * npmrc 初始为 legacy username/_password 兜底形态；verdaccio 就绪后由
+ * mintPublishToken 升级为 Bearer _authToken（新版 npm 不自动发 legacy Basic）。
  */
 function ensureAuthAssets() {
   if (existsSync(HTPASSWD_PATH) && readFileSync(HTPASSWD_PATH, 'utf8').startsWith(`${TEST_USER}:`)) {
-    info('htpasswd 已存在（test 用户），跳过 seed')
+    info('htpasswd 已存在（test 用户），复用')
   } else {
     const pnpmDir = join(ROOT, 'node_modules', '.pnpm')
     const bcryptDirEntry = readdirSync(pnpmDir).find(entry => entry.startsWith('bcryptjs@'))
@@ -460,15 +471,49 @@ function ensureAuthAssets() {
     info('htpasswd 已 seed（test 用户）')
   }
 
-  const passwordBase64 = Buffer.from(TEST_PASSWORD, 'utf8').toString('base64')
+  writePublishNpmrc(null)
+  info('发布用 npmrc 已就绪（legacy 凭据兜底；verdaccio 就绪后升级为 Bearer token，.verdaccio-storage/ git-ignored）')
+}
+
+/**
+ * 写发布用 npmrc。authToken 非 null = Bearer 形态（npm 全版本认 _authToken）；
+ * null = legacy username/_password 兜底（仅当 token mint 失败时使用）。
+ */
+function writePublishNpmrc(authToken) {
   const registryHost = new URL(REGISTRY_URL).host
-  writeFileSync(PUBLISH_NPMRC_PATH, [
-    `registry=${REGISTRY_URL}/`,
-    `//${registryHost}/:username = ${TEST_USER}`,
-    `//${registryHost}/:_password = ${passwordBase64}`,
-    '',
-  ].join('\n'))
-  info('发布用 npmrc 已就绪（.verdaccio-storage/publish.npmrc，git-ignored）')
+  const lines = [`registry=${REGISTRY_URL}/`]
+  if (authToken !== null) {
+    lines.push(`//${registryHost}/:_authToken=${authToken}`)
+  } else {
+    lines.push(`//${registryHost}/:username = ${TEST_USER}`)
+    lines.push(`//${registryHost}/:_password = ${Buffer.from(TEST_PASSWORD, 'utf8').toString('base64')}`)
+  }
+  writeFileSync(PUBLISH_NPMRC_PATH, `${lines.join('\n')}\n`)
+}
+
+/**
+ * verdaccio 就绪后用 Basic 凭据换 Bearer JWT（npm adduser 同款端点），把
+ * publish.npmrc 升级为 _authToken 形态。失败仅警告不阻断——本插件 scope 的
+ * packages 块 publish 是 $all（见 verdaccioConfigFor），发布本身不依赖鉴权；
+ * token 只让 '**' 兜底路径（unscoped 包名 / 反发布）也可用。
+ */
+async function mintPublishToken() {
+  try {
+    const auth = Buffer.from(`${TEST_USER}:${TEST_PASSWORD}`, 'utf8').toString('base64')
+    const response = await fetch(`${REGISTRY_URL}/-/user/org.couchdb.user:${TEST_USER}`, {
+      method: 'PUT',
+      headers: { authorization: `Basic ${auth}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: TEST_USER, password: TEST_PASSWORD, type: 'user', roles: [], date: new Date().toISOString() }),
+      signal: AbortSignal.timeout(5_000),
+    })
+    if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
+    const body = await response.json()
+    if (typeof body?.token !== 'string' || body.token === '') throw new Error('响应缺少 token 字段')
+    writePublishNpmrc(body.token)
+    info('发布凭据已升级为 Bearer token（.verdaccio-storage/publish.npmrc）')
+  } catch (error) {
+    console.warn(`[test-version-bump] token mint 失败（${error instanceof Error ? error.message : String(error)}）——继续用 legacy 凭据（scope 块 publish: $all 下发布不受影响）`)
+  }
 }
 
 function startVerdaccio() {
@@ -547,6 +592,7 @@ async function publishAndVerify(pkgName, tarballPath, version, stepLabel) {
   info(`${stepLabel} 启动 Verdaccio 并发布 ${version}……`)
   activeVerdaccioChild = startVerdaccio()
   await waitForRegistry()
+  await mintPublishToken()
   publishTarball(pkgName, tarballPath)
   await verifyLatest(pkgName, version)
 }
@@ -786,7 +832,7 @@ async function main() {
     const plan = activeMode === 'commit' ? await planCommitMode(rl, options) : planBumpMode()
 
     mkdirSync(STORAGE_DIR, { recursive: true })
-    writeFileSync(CONFIG_PATH, VERDACCIO_CONFIG)
+    writeFileSync(CONFIG_PATH, verdaccioConfigFor(readManifest().name))
     ensureAuthAssets()
 
     if (plan.mode === 'commit') await runCommitMode(rl, plan)
