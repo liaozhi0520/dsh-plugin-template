@@ -93,7 +93,7 @@ function verdaccioConfigFor(pkgName) {
 storage: ./.verdaccio-storage
 listen: 127.0.0.1:4873
 web:
-  title: dsh-plugin-template 本地版本 bump 验证源
+  title: ${pkgName} 本地版本 bump 验证源
 auth:
   htpasswd:
     file: ./.verdaccio-storage/htpasswd

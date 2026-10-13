@@ -2,3 +2,10 @@ node_modules/
 lib/
 *.log
 *.tgz
+
+# Verdaccio 版本测试台的运行资产（scripts/test-version-bump.mjs）：
+# htpasswd（测试账号 bcrypt 哈希）、publish.npmrc（**含 Bearer JWT token**）、
+# registry storage、bump 状态、commit 模式的临时 worktree——一律不进版本库。
+# 另注：上面的 *.tgz / *.log 已兜住测试台产物，但 .verdaccio-storage 里的
+# 凭据与状态文件不在其列，必须整目录忽略。
+.verdaccio-storage/

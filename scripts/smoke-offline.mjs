@@ -42,7 +42,13 @@ try {
   await register('./entry-guard-hook.mjs', import.meta.url)
   const entry = await import('../lib/index.js')
   check('entry isolation: lib/index.js 静态图无 @deepseek-ai/dsh* 运行时依赖', true)
-  check(`entry exports: name = ${entry.name}`, entry.name === 'dsh-plugin-template')
+  // 期望的 cordis 插件名（短 id）从 cordis.patch.yml 的 id 字段取（改名表 ② 的
+  // 唯一来源）——衍生插件改名后本守护不破，反而变成「cordis id ↔ 构建产物」
+  // 的交叉校验（patch 里 id 写错 / lib 没重建都会在这里现形）。
+  const patchSource = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
+  const patchId = patchSource.match(/^\s*-\s*id:\s*(\S+)\s*$/m)?.[1] ?? ''
+  check(`rename: cordis.patch.yml 的 id 字段可提取（${patchId}）`, patchId !== '')
+  check(`entry exports: name = ${entry.name}（= cordis.patch.yml id）`, entry.name === patchId)
   // schemastery v3 的 schema 实例是可调用函数（schema(data) 即校验），不是 object。
   check('entry exports: Config schema（schemastery 可调用 schema）', typeof entry.Config === 'function')
   check(
