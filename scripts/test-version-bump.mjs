@@ -109,6 +109,10 @@ ${scopeBlock}  '**':
 middlewares:
   audit:
     enabled: false
+log:
+  type: file
+  path: ./.verdaccio-storage/verdaccio-file.log
+  level: http
 `
 }
 
@@ -531,15 +535,44 @@ function stopVerdaccio(child) {
   info('verdaccio 已停止')
 }
 
-async function waitForRegistry() {
-  for (let attempt = 1; attempt <= 25; attempt += 1) {
+/** 4873 已有服务在监听（上次运行的 verdaccio 残留）时给出可执行的自救指引。 */
+async function preflightPortFree() {
+  try {
+    const response = await fetch(`${REGISTRY_URL}/`, { signal: AbortSignal.timeout(2_000) })
+    if (response.ok) {
+      fail(
+        `${REGISTRY_URL} 已有服务在监听——大概率是上次异常终止留下的 verdaccio 孤儿进程。`
+        + `清理：netstat -ano | findstr 4873 找到 PID，然后 taskkill /pid <PID> /T /F，再重跑本脚本。`,
+      )
+    }
+  } catch { /* 端口空闲（连接被拒/超时都是预期） */ }
+}
+
+/**
+ * 轮询等待 verdaccio 就绪。**预算按时间计（60s）而非固定次数**——端口未监听时
+ * fetch 瞬间失败（ECONNREFUSED），固定次数的实际预算只有 ~15s，冷启动
+ * （当日首次拉起，Defender 扫描 + 依赖预热）实测会超（verdaccio 就绪曾落在
+ * 第 3 次探测 ≈ 2s，也实测过 15s 预算直接放弃的误报）。verdaccio 的 stdout
+ * 重定向到文件后被 taskkill /F 丢弃，日志可能恒为空——就绪判定只能靠端口探测，
+ * 诊断信息靠进程退出检测 + log 配置落盘（见 VERDACCIO_CONFIG 的 log 段）。
+ */
+async function waitForRegistry(child) {
+  const budgetUntil = Date.now() + 60_000
+  let lastError = ''
+  while (Date.now() < budgetUntil) {
+    if (child.exitCode !== null && child.exitCode !== undefined) {
+      fail(`verdaccio 进程已提前退出（exit ${String(child.exitCode)}）——查看 .verdaccio-storage/verdaccio.log 与 .verdaccio-storage/verdaccio-file.log`)
+    }
     try {
       const response = await fetch(`${REGISTRY_URL}/`, { signal: AbortSignal.timeout(2_000) })
-      if (response.ok) { info(`verdaccio 就绪（第 ${String(attempt)} 次探测）`); return }
-    } catch { /* 未就绪，继续轮询 */ }
-    await new Promise(resolve => setTimeout(resolve, 600))
+      if (response.ok) { info('verdaccio 就绪'); return }
+      lastError = `HTTP ${String(response.status)}`
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+    }
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
-  fail('verdaccio 30s 内未就绪——查看 .verdaccio-storage/verdaccio.log')
+  fail(`verdaccio 60s 内未就绪（最后一次探测：${lastError || '未知'}）——若反复出现，查看 .verdaccio-storage/verdaccio-file.log 与 verdaccio.log`)
 }
 
 // ---------------------------------------------------------------------------
@@ -590,8 +623,9 @@ async function verifyLatest(pkgName, version) {
 /** 启动 Verdaccio → 发布 → 校验 /latest（两模式共用的一段）。 */
 async function publishAndVerify(pkgName, tarballPath, version, stepLabel) {
   info(`${stepLabel} 启动 Verdaccio 并发布 ${version}……`)
+  await preflightPortFree()
   activeVerdaccioChild = startVerdaccio()
-  await waitForRegistry()
+  await waitForRegistry(activeVerdaccioChild)
   await mintPublishToken()
   publishTarball(pkgName, tarballPath)
   await verifyLatest(pkgName, version)

@@ -120,3 +120,17 @@ npm 侧自报 HttpErrorAuthUnknown）→ E401。
 通用规则：移植任何「按假设的包名/scope/路径生成配置」的脚本，先把假设参数化，
 再追问——**原仓库里这条路径真的被执行过吗**（publish: $all 会让鉴权代码变成
 从未运行的死角）。
+
+## 13. 「固定次数」轮询预算在快失败场景下会缩水；后台进程日志被 taskkill /F 吞掉
+
+`waitForRegistry` 曾写「25 次探测 × 600ms」当 30s 预算用——端口未监听时 fetch
+是瞬间失败（ECONNREFUSED），实际预算只有 ~15s：verdaccio 热启动 2s 就绪（掩盖
+问题），冷启动（当日首次拉起，Defender 扫描 + 依赖预热）实测超 15s → 误报
+「30s 内未就绪」。修法：**预算按时间计**（`Date.now() + 60_000`），轮询中途
+检测子进程退出码（提前退出 = 配置/环境问题，立即报错不等预算），启动前先
+预检端口（已被占用 → 秒级报错 + 自救指引，不空转）。
+
+同族坑：verdaccio 以 `detached + stdio 重定向到文件` 后台启动时，其 stdout
+日志在缓冲里，**taskkill /F 会让文件恒为空**——「查看日志」永远看不到东西。
+修法：verdaccio 配置加 `log: { type: file, path: …, level: http }` 让它自己
+落盘（6.10 实测接受该键，启动即写 config/plugin 行）。
