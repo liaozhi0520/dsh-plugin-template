@@ -1,5 +1,14 @@
 # dsh-plugin-template 版本兼容与自更新方案
 
+> ⚠️ **自更新机制已退役（范式收敛，0.2.0-rc.2 迁移）**：本文 §1.3/§4/§5 描述的
+> 进程内自更新安装通道（self-update.ts / updateSelf RPC / 更新条 / UpdateBubble）
+> 已随范式 dsh-comfyui-based-tools 0.8.0（bdcd8de）**整体删除**——根因是 Node ESM
+> 模块缓存缺陷（重装后进程内旧模块继续运行，自更新只会制造「新 UI + 旧内核」
+> 错配）。现行范式 = 卸载重装 + 版本提示弹窗（GlobalNotice/CommandChip）+
+> 陈旧代码提醒（StaleBanner/package-info/BUILD_VERSION），见 `AGENTS.md`
+> 硬约定与 `docs/compat-plan-0.2.0-rc.2.md`。本文 §1.1/§1.2 的版本兼容方法论
+> 仍准确，全文仅作历史存档，不宜照其恢复自更新。
+
 > ⚠️ **窗口模型变迁注记（2026-09-12）**：本文写作时的窗口模型是
 > `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]` 双窗口（§1.2 的 peer 并集、
 > dev 钉线、特征探测、旧线冒烟均属该模型的方法论）。当前已收敛为
