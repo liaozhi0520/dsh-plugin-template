@@ -17,92 +17,28 @@ npm** 或**推 GitHub** 供用户安装。
   的远程调用形态（为什么是手写描述符而非官方 `@Remote` 装饰器，见 remote.ts
   头注释）。
 
-## 使用本模板
+## 使用本模板（衍生新插件）
 
-通过 GitHub 的 "Use this template" **创建新的插件仓库**（仓库名随意），**克隆到
-本地**后，先**改名**。改名前搞懂插件身份由**三样东西**组成，它们互相派生：
+**完整衍生规则（五张落点表 + 操作流程 + 验证门 + 实测坑）在 `docs/derivation-guide.md`——agent 按它执行；本节只是概览。**
 
-| 概念 | 本模板取值 | 怎么派生 |
+插件身份 = 三件套，互相派生：
+
+| 概念 | 模板取值 | 派生规则 |
 |---|---|---|
-| **短插件 id** | `dsh-plugin-template` | = **仓库名**（use-this-template 建库时你起的名字；克隆到本地即根文件夹名） |
-| **npm 包名**（scoped） | `@scoped/dsh-plugin-template` | `@<scope>/` + 短 id；`@scope` = 你的 npm 用户名 |
-| **环境前缀** | `DSH_PLUGIN_TEMPLATE` | 短 id 全大写、`-`/`.` 转 `_` |
+| **短插件 id** | `dsh-plugin-template` | = 仓库名（cordis 插件名、cordis.patch 条目 id、settings ns、Typert package 都从它派生） |
+| **npm 包名** | `@scoped/dsh-plugin-template` | `@<npm用户名>/<短id>`（`npm whoami` 取 scope） |
+| **环境前缀** | `DSH_PLUGIN_TEMPLATE` | 短 id 全大写、`-`/`.` → `_`（STRICT 环境变量与停用标记名从它派生） |
 
-`@scope` 怎么拿：`npm whoami`（未登录先 `npm login`）。本模板占位为
-`@scoped/dsh-plugin-template`，把 `@scoped` 换成 `npm whoami` 的结果即可。
+流程与验证：
 
-改名 = 换这三样东西，各有固定落点。**漏改不报错**——这些标识只是注册 key，
-构建/加载都不校验一致性，漏改只会让对应功能静默失效（配置页不出现、RPC 404、
-停用面板收不到标记），所以必须逐表核对。建议执行顺序：**先全局换短 id（包名里
-的短 id 会一并变）→ 再换 3 处 scope → 再换前缀 → 最后核对顺手项**。
+1. 复制模板（排除 `.git`/`node_modules`/`lib`/`.verdaccio-storage`，保留点开头文件）；
+2. 按指南五张表改名：① npm 包名 4 处 → ② 短插件 id → ③ 环境前缀 → ④ 顺手项 → **⑤ RPC namespace/service 与端点串（两端必须一致，漏改不报错）**；
+3. `pnpm install`（自动首建）→ `pnpm typecheck && pnpm build && pnpm smoke-offline` 全绿；
+4. `git init` + `git config core.hooksPath .githooks` + 初始 commit（pre-commit 跑版本一致性闸门）；
+5. 残留核对区分「身份引用」（必须零残留）与「描述性提及」（可保留），详见指南 §4。
 
-### ① npm 包名（scoped）—— 4 处
-
-| 位置 | 改成 |
-|---|---|
-| `package.json` 的 `name` | `@<新scope>/<新短id>` |
-| `cordis.patch.yml` 的 `name:` | `"@<新scope>/<新短id>"`（**必须加引号**，YAML 里 `@` 是保留指示符；按它解析到包 `exports['.']`） |
-| `src/client/bundle-key.ts` 的 `BUNDLE_KEY` | 同上（plugins.bundle.config 槽位 key + 升级提示命令片同源；**必须逐字等于包名**，smoke-offline 0c 节守护） |
-| `tsdown.config.ts` 的 `PLUGIN_ID` | 同上（`__ModuleLoader__` banner id 与 CSS `data-plugin` 归属同源） |
-
-### ② 短插件 id —— 其余 15+ 处
-
-| 位置 | 改成 |
-|---|---|
-| `cordis.patch.yml` 的 `id:` | `<新短id>` |
-| `src/index.ts` 的 `export const name` | 同上（cordis 插件名） |
-| `src/main.ts` 的 Typert `package:` 字段 | 同上 |
-| `src/spec.ts` 的 `SETTINGS_NS` | 同上（= profile 组合里本插件条目 id，settings.replace 的 ns） |
-| `src/client/index.ts` 的 `export const name` + `shell.overlay` 条目 id（`template-stale-banner` / `template-update-notice`） | name 同上（cordis 插件名）；条目 id 改 `<语义前缀>-stale-banner` / `<语义前缀>-update-notice`（语义前缀 = 你的插件语义缩写，如 `demo`；两个 id 只需彼此唯一，不必等于短 id） |
-| `src/remote.ts` 的端点描述符 `id`（`<短id>#…`） | 同上（Typert 关联） |
-| `src/invariant.ts` 的 `PACKAGE_NAME` / `name` | 同上（伴生插件名） |
-| `tsdown.config.ts` 的 CSS 虚拟模块前缀 | 同上 |
-
-### ③ 环境前缀 —— 2 处 + 各文件错误/日志前缀
-
-| 位置 | 改成 |
-|---|---|
-| `src/version-gate.ts` 错误前缀、`DSH_<前缀>_STRICT` 变量名 | `<新前缀>` + `_STRICT` |
-| `src/shared/disabled-flag.ts` 的 `__DSH_<前缀>_DISABLED__` 变量名 | `__<新前缀>_DISABLED__` |
-| 各文件错误/日志前缀（`[dsh-plugin-template]`）：`src/main.ts`、`src/soft-disable.ts`、`src/update-state.ts`、`src/package-info.ts`、`src/profile-gate.ts`、client 组件与 `src/client/index.ts` | 换成新短 id（包名/版本本身从自身 package.json 读，无需改） |
-
-### ④ 顺手项
-
-| 位置 | 改成 |
-|---|---|
-| `src/client/locales.ts` 的 `title`（插件页卡片显示名；**zh/en 必须同值**——`scripts/gen-version.mjs` 构建期提取，不一致直接 build 报错） | 你的插件名 |
-| `src/client/locales.ts` 的 `panelTitle`（详情页设置面板标题，en 为 "Setting Panel of <插件名>"） | 你的面板标题 |
-| `src/client/locales.ts` 的 `TEMPLATE_NS`（`template.panel`） | 你的 locale 命名空间（如 `demo.panel`）——**共 6 处同源**：locales.ts 本体、client/index.ts 的 LocaleNamespaceMap 声明、4 个组件的 `PropsLocale<'…'>` 类型参数（typecheck 会拦漏改，非静默，但别靠它兜底） |
-| `scripts/gen-version.mjs` 的 `BASE_DESCRIPTION` | 卡片描述基底文案（兼容窗口自动注入，不用写版本） |
-| `icon.svg` | 你的插件图标（「插件」页卡片读取） |
-| `src/spec.ts` 的 greeting/punctuation 默认值 + `cordis.patch.yml` 的 config 注释示例 | demo 默认值 |
-| `package.json` 的 `description` | 你的插件一句话描述 |
-| `LICENSE` 版权行 | 你的名字 |
-| `README.md` / `AGENTS.md` / 示例文案里出现的旧短 id | 同上 |
-
-### ⑤ RPC namespace/service 与端点串（**两端必须一致，漏改不报错但身份不彻底**）
-
-Typert 服务名、RPC 端点串与描述符 id 前缀是同一条链（模板取值 `template`），改名时整体换成你的服务名（下表记作 `<服务名>`，建议 = 短 id 或其语义缩写）：
-
-| 位置 | 改成 |
-|---|---|
-| `src/remote.ts`：`DESCRIPTORS` 的 `service` / `namespace` 与 `TemplateRemote.typertRemote` 的 `serviceKey` / `namespace` | `<服务名>` |
-| `src/main.ts` 的 `ctx.provide('<服务>', …)` | `<服务名>` |
-| `src/shared/contract.ts` 的 `TEMPLATE_ENDPOINT`（ping/getConfig/saveConfig 端点串） | `<服务名>/<method>` |
-| `src/shared/update-contract.ts` 的 `UPDATE_ENDPOINT`（checkUpdate/getUpdateState 端点串） | `<服务名>/<method>` |
-| README / AGENTS / 各文件头注释里的端点名散文（`template/ping` 等） | 同步更正 |
-
-### 验证
-
-1. `pnpm install`（自动跑 `prepare` 完成首次构建）
-2. `pnpm typecheck && pnpm build && pnpm smoke-offline` 全绿（smoke 会抓出
-   bundle key / 版本烧录 / 元数据同源的漏改）
-3. `git grep <旧短id>` / `<旧包名>` 残留核对，**区分两类**：身份引用（RPC
-   端点串 `template/`、`SETTINGS_NS`、locale ns `template.panel`、overlay id、
-   `@scoped`、`DSH_PLUGIN_TEMPLATE`）必须零残留；描述性提及可保留（如
-   gen-version 的 `BASE_DESCRIPTION`、README 里「从 dsh-plugin-template 衍生」
-   的说明）
-4. 重新安装进 profile（见下节）
+> 本指南经过端到端实测：按表衍生 `@demo/dsh-demo-greeter`，34 文件差异、四连全绿、
+> pre-commit 放行；实测发现的缺口已回填指南与守护（见指南 §5 实测坑清单）。
 
 ## 开发与生效
 
@@ -336,6 +272,7 @@ dsh plugin --profile desktop add github:<owner>/dsh-plugin-template#<commit-sha>
 ├── src/client/CommandChip.tsx        # 可复制命令片
 ├── src/client/ui/                    # 官方 UI 原语复制件（Button/Modal/NoticeModal/Switch/Menu…）
 ├── src/client/*.module.css           # 样式（构建期物化自注入）
+├── docs/derivation-guide.md           # 衍生指南（agent 执行用）：五张落点表 + 流程 + 验证门 + 实测坑
 ├── docs/compat-plan-0.2.0-rc.2.md    # 跨线迁移 + 范式收敛执行记录（逐 API 复核）
 ├── docs/compat-plan-TEMPLATE.md      # 兼容迁移执行记录骨架（每次追新 cp 一份填写）
 ├── docs/compat-guide-0.1.2-to-0.1.5.md / -0.1.1-to-0.1.2.md  # 历史手册（已归档）

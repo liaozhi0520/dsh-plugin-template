@@ -24,6 +24,11 @@ SDK/headless 等形态一律不支持——启动时 profile 门禁（`src/profi
   的远程调用形态（为什么是手写描述符而非官方 `@Remote` 装饰器，见 remote.ts
   头注释）。
 
+- **衍生新插件**：按 `docs/derivation-guide.md` 执行（五张落点表 + 操作流程 +
+  验证门 + 实测坑清单；README「使用本模板」是其概览）——该指南经端到端实测
+  （衍生 `@demo/dsh-demo-greeter`，34 文件差异、四连全绿），衍生过程中发现的
+  新落点/新坑必须回填该指南。
+
 - 双入口：host 半 `src/index.ts` → `lib/index.js`；client 半 `src/client/` →
   `lib/client.js`。双端共享契约在 `src/shared/`（**禁 Node 依赖**——client
   bundle 会内联本目录）。
