@@ -53,7 +53,7 @@ npm** 或**推 GitHub** 供用户安装。
 | `src/index.ts` 的 `export const name` | 同上（cordis 插件名） |
 | `src/main.ts` 的 Typert `package:` 字段 | 同上 |
 | `src/spec.ts` 的 `SETTINGS_NS` | 同上（= profile 组合里本插件条目 id，settings.replace 的 ns） |
-| `src/client/index.ts` 的 `export const name` + `shell.overlay` 条目 id（`template-stale-banner` / `template-update-notice`） | 同上 |
+| `src/client/index.ts` 的 `export const name` + `shell.overlay` 条目 id（`template-stale-banner` / `template-update-notice`） | name 同上（cordis 插件名）；条目 id 改 `<语义前缀>-stale-banner` / `<语义前缀>-update-notice`（语义前缀 = 你的插件语义缩写，如 `demo`；两个 id 只需彼此唯一，不必等于短 id） |
 | `src/remote.ts` 的端点描述符 `id`（`<短id>#…`） | 同上（Typert 关联） |
 | `src/invariant.ts` 的 `PACKAGE_NAME` / `name` | 同上（伴生插件名） |
 | `tsdown.config.ts` 的 CSS 虚拟模块前缀 | 同上 |
@@ -72,19 +72,36 @@ npm** 或**推 GitHub** 供用户安装。
 |---|---|
 | `src/client/locales.ts` 的 `title`（插件页卡片显示名；**zh/en 必须同值**——`scripts/gen-version.mjs` 构建期提取，不一致直接 build 报错） | 你的插件名 |
 | `src/client/locales.ts` 的 `panelTitle`（详情页设置面板标题，en 为 "Setting Panel of <插件名>"） | 你的面板标题 |
-| `src/client/locales.ts` 的 `TEMPLATE_NS`（`template.panel`）与 client 入口的 LocaleNamespaceMap 声明 | 你的 locale 命名空间（两处同源） |
+| `src/client/locales.ts` 的 `TEMPLATE_NS`（`template.panel`） | 你的 locale 命名空间（如 `demo.panel`）——**共 6 处同源**：locales.ts 本体、client/index.ts 的 LocaleNamespaceMap 声明、4 个组件的 `PropsLocale<'…'>` 类型参数（typecheck 会拦漏改，非静默，但别靠它兜底） |
 | `scripts/gen-version.mjs` 的 `BASE_DESCRIPTION` | 卡片描述基底文案（兼容窗口自动注入，不用写版本） |
 | `icon.svg` | 你的插件图标（「插件」页卡片读取） |
 | `src/spec.ts` 的 greeting/punctuation 默认值 + `cordis.patch.yml` 的 config 注释示例 | demo 默认值 |
+| `package.json` 的 `description` | 你的插件一句话描述 |
 | `LICENSE` 版权行 | 你的名字 |
 | `README.md` / `AGENTS.md` / 示例文案里出现的旧短 id | 同上 |
+
+### ⑤ RPC namespace/service 与端点串（**两端必须一致，漏改不报错但身份不彻底**）
+
+Typert 服务名、RPC 端点串与描述符 id 前缀是同一条链（模板取值 `template`），改名时整体换成你的服务名（下表记作 `<服务名>`，建议 = 短 id 或其语义缩写）：
+
+| 位置 | 改成 |
+|---|---|
+| `src/remote.ts`：`DESCRIPTORS` 的 `service` / `namespace` 与 `TemplateRemote.typertRemote` 的 `serviceKey` / `namespace` | `<服务名>` |
+| `src/main.ts` 的 `ctx.provide('<服务>', …)` | `<服务名>` |
+| `src/shared/contract.ts` 的 `TEMPLATE_ENDPOINT`（ping/getConfig/saveConfig 端点串） | `<服务名>/<method>` |
+| `src/shared/update-contract.ts` 的 `UPDATE_ENDPOINT`（checkUpdate/getUpdateState 端点串） | `<服务名>/<method>` |
+| README / AGENTS / 各文件头注释里的端点名散文（`template/ping` 等） | 同步更正 |
 
 ### 验证
 
 1. `pnpm install`（自动跑 `prepare` 完成首次构建）
 2. `pnpm typecheck && pnpm build && pnpm smoke-offline` 全绿（smoke 会抓出
    bundle key / 版本烧录 / 元数据同源的漏改）
-3. `git grep <旧短id>` 与 `git grep <旧包名>`，全仓应无残留
+3. `git grep <旧短id>` / `<旧包名>` 残留核对，**区分两类**：身份引用（RPC
+   端点串 `template/`、`SETTINGS_NS`、locale ns `template.panel`、overlay id、
+   `@scoped`、`DSH_PLUGIN_TEMPLATE`）必须零残留；描述性提及可保留（如
+   gen-version 的 `BASE_DESCRIPTION`、README 里「从 dsh-plugin-template 衍生」
+   的说明）
 4. 重新安装进 profile（见下节）
 
 ## 开发与生效
