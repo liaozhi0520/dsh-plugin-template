@@ -84,19 +84,27 @@ const EXIT_PRECONDITION = 2
  * 形态在新版 npm 下不会自动发 Basic（实测 E401 "need: Basic, Bearer"）。
  * scope 块 publish/unpublish 开 $all 与范式同款：本地一次性测试源，发布/
  * 反发布不走鉴权；'**' 兜底仍要求鉴权（Bearer token mint 见 mintPublishToken）。
+ *
+ * ⚠️ 所有路径**必须绝对化**：verdaccio 把配置里的相对路径解析到**配置文件
+ * 所在目录**（.verdaccio-storage/）而非 CWD——相对写法会让 verdaccio 用上
+ * 嵌套目录里自创的 htpasswd/storage（脚本播种的凭据失效，file log 实证
+ * "using htpasswd file: …\.verdaccio-storage\.verdaccio-storage\htpasswd"）。
+ * title 必须加引号：包名以 @ 开头，而 @ 是 YAML 保留指示符（纯标量不能以 @
+ * 开头，js-yaml 直接抛错 → verdaccio exit 1）——与 cordis.patch.yml 的 name
+ * 同一个坑（README 改名表 ①）。
  */
 function verdaccioConfigFor(pkgName) {
   const scopeBlock = pkgName.startsWith('@')
     ? `  '${pkgName.split('/')[0]}/**':\n    access: $all\n    publish: $all\n    unpublish: $all\n`
     : ''
   return `# 由 scripts/test-version-bump.mjs 每次运行时生成（勿手改，测试后随文件夹一起删）。
-storage: ./.verdaccio-storage
+storage: ${JSON.stringify(join(STORAGE_DIR, 'storage'))}
 listen: 127.0.0.1:4873
 web:
-  title: ${pkgName} 本地版本 bump 验证源
+  title: '${pkgName} 本地版本 bump 验证源'
 auth:
   htpasswd:
-    file: ./.verdaccio-storage/htpasswd
+    file: ${JSON.stringify(join(STORAGE_DIR, 'htpasswd'))}
     max_users: -1
 uplinks:
   npmjs:
@@ -111,7 +119,7 @@ middlewares:
     enabled: false
 log:
   type: file
-  path: ./.verdaccio-storage/verdaccio-file.log
+  path: ${JSON.stringify(join(STORAGE_DIR, 'verdaccio-file.log'))}
   level: http
 `
 }

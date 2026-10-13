@@ -134,3 +134,23 @@ npm 侧自报 HttpErrorAuthUnknown）→ E401。
 日志在缓冲里，**taskkill /F 会让文件恒为空**——「查看日志」永远看不到东西。
 修法：verdaccio 配置加 `log: { type: file, path: …, level: http }` 让它自己
 落盘（6.10 实测接受该键，启动即写 config/plugin 行）。
+
+## 14. 生成 verdaccio 配置的两个致命细节（@ 保留指示符 + 相对路径解析基准）
+
+verdaccio 6.10 实测（test-version-bump 三连坑的最终形态）：
+
+1. **YAML 里 `@` 是保留指示符**——纯标量不能以 `@` 开头。把 web.title 参数化成
+   `title: ${pkgName} …` 后，包名 `@scoped/…` 让 js-yaml 直接抛错 →
+   `@verdaccio/config` parseConfigFile 转成 `CONFIG: it does not look like a
+   valid config file` → verdaccio exit 1。与 cordis.patch.yml 的 name 是**同一个
+   坑**（README 改名表 ①）：凡按包名生成 YAML 的地方，含 `@` 的值一律加引号。
+2. **verdaccio 把配置里的相对路径解析到配置文件所在目录**（不是 CWD）——
+   `storage: ./.verdaccio-storage`、`file: ./.verdaccio-storage/htpasswd` 实际
+   落在 `.verdaccio-storage/.verdaccio-storage/` 嵌套目录（file log 实证
+   "using htpasswd file: …嵌套…\htpasswd"）：脚本播种的 htpasswd 失效、storage
+   与脚本资产混层。修法：**生成的配置里所有路径一律绝对化**
+   （`JSON.stringify(join(...))` 产出的双引号 YAML 串转义正确）。
+3. 诊断手法沉淀：verdaccio 自己的 file log（`log: { type: file }`）会打印
+   每个插件实际加载的路径——「配置里写的路径」与「插件实际用的路径」对不上
+   时一眼现形；配合 `log error lines` 抓 `cannot open config file` 的真实
+   err.stack（`CONFIG_NOT_VALID` 的 else 分支会打 `: false`，别被它带偏）。
