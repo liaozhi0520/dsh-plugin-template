@@ -7,4 +7,4 @@
  * 重装未重启，Node ESM 模块缓存缺陷），弹出陈旧提醒对话框要求重启 DeepSeek
  * Harness。改动本文件请改 gen-version.mjs 的模板。
  */
-export const BUILD_VERSION = "0.1.1"
+export const BUILD_VERSION = "0.1.0"
