@@ -47,6 +47,9 @@
   "scripts": {
     "build": "node scripts/gen-version.mjs && tsc -p tsconfig.build.json && tsdown",
     "typecheck": "tsc --noEmit",
+    "check-version": "node scripts/check-version-sync.mjs",
+    "smoke-offline": "node scripts/smoke-offline.mjs",
+    "test-version-bump": "node scripts/test-version-bump.mjs",
     "version": "node scripts/gen-version.mjs && git add src/client/build-version.ts locale",
     "prepare": "pnpm run build",
     "prepack": "pnpm run build"
@@ -89,6 +92,7 @@
     "lightningcss": "^1.33.0",
     "react": "^18.2.0",
     "tsdown": "^0.22.14",
-    "typescript": "^5.5.2"
+    "typescript": "^5.5.2",
+    "verdaccio": "^6.10.5"
   }
 }

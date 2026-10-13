@@ -1,0 +1,6 @@
+# 本文件自身也用 LF（否则每次 git 操作都会刷一行换行转换警告）
+.gitattributes text eol=lf
+
+# git 钩子（无扩展名的 sh 脚本）同样必须 LF——CRLF shebang 会让钩子静默失效
+# （shell 找不到解释器不报错、直接不执行，版本一致性闸门形同虚设）。
+.githooks/* text eol=lf

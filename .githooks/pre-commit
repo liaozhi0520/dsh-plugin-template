@@ -1,0 +1,19 @@
+#!/bin/sh
+# 版本一致性守卫（见 README「发版纪律」/ AGENTS.md）：
+# bump 了 package.json 的 version 就必须跑构建把新版本烧进
+# src/client/build-version.ts，否则产物与包清单不一致——发布包里烧旧版本会让
+# 每个用户每次启动都被 StaleBanner 误报「陈旧代码」。
+#
+# 本仓库无 CI，这是提交期的唯一自动闸门（~50ms，不构建、只比对）。
+# 跳过：git commit --no-verify
+# 启用：git config core.hooksPath .githooks   （新克隆需执行一次；换行见 .gitattributes）
+set -e
+
+root=$(git rev-parse --show-toplevel) || exit 0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "[pre-commit] 未找到 node，跳过版本一致性检查（$root）" >&2
+  exit 0
+fi
+
+exec node "$root/scripts/check-version-sync.mjs" --quiet
