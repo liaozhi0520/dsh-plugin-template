@@ -1,12 +1,40 @@
-/* 演示面板样式（CSS Modules：类名由构建期哈希，组件经 classes 映射引用）。
+/* 模板配置页样式（类名经 CSS Modules 哈希，防全局污染）。
+   布局：标题行（左：标题；右：插件更新条）→ 更新提示条（available 时）→
+   intro → 配置编辑卡 → ping 演示行，与 dsh-comfyui-based-tools 的
+   ComfySection 同构。
    颜色一律走 harness 设计令牌（--dsw-alias-*，由 ui-theme 按主题写到 :root），
    明暗主题自动跟随；禁止字面颜色。 */
 
+/* 挂在「插件」页组合包详情页的配置区块里（流式布局，页面自身滚动）：
+   面板整体做成边框可见的卡片容器（最小宽度给足存在感）。 */
 .section {
-  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 640px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* 版本不兼容停用面板（TemplateDisabledSection）的纵向堆叠容器：
+   与正常面板同款边框卡片容器（同一槽位，视觉一致）。 */
+.disabledSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-width: 640px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
 }
 
 .title {
@@ -16,116 +44,42 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.intro {
+.updateBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 升级提示条（available 相位独占一行）：指引句 + 命令框行纵向排列，
+   边框卡片形态与面板其他区块一致；命令框行随内容自适应（不铺满整行）。 */
+.updateNotice {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+}
+
+.updateNoticeText {
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
   color: var(--dsw-alias-label-secondary);
 }
 
-.row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.button {
-  padding: 6px 14px;
-  font-size: 13px;
-  color: var(--dsw-alias-label-primary);
-  background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.button:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.result {
+.updateVersion {
   font-size: 12px;
   color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 
-.command {
-  padding: 4px 8px;
-  font-size: 12px;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  user-select: all;
-}
-
-/* --- 插件自更新（标题右侧紧凑更新条 + 标题行下详情行） --- */
-
-/* 标题行：左 = 标题；右 = 插件更新条（space-between 两端对齐） */
-.headerRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  min-width: 0;
-  justify-content: space-between;
-}
-
-/* 右侧更新条：版本徽标 + 状态词 + 动作按钮，保持一行紧凑；
-   长文案一律不进来——错误输出/重启提示走下方详情行 */
-.updateBar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  row-gap: 6px;
-  margin-left: auto;
-  min-width: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-/* 版本徽标 */
-.updateVersion {
-  flex: none;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-interactive-bg-hover);
-  border-radius: 6px;
-}
-
-/* 更新条动作按钮（比 .button 紧凑一档） */
-.updateButton {
-  flex: none;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: var(--dsw-alias-label-primary);
-  background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.updateButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-/* 状态词基类：超长截断省略（错误词的完整全文在详情行 + title 悬停），
-   颜色由修饰类给 */
 .updateStatus {
   font-size: 12px;
-  line-height: 1.4;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .updateStatusOk {
@@ -134,52 +88,152 @@
 
 .updateStatusError {
   color: var(--dsw-alias-state-error-primary);
+  cursor: help;
 }
 
-/* 详情行：完整错误输出（含 dsh plugin add 输出尾部的多行文本）。
-   pre-wrap 保留换行、超长纵向滚动、文本可选中复制。
-   .section 自带 16px padding，详情行负 margin 贴近更新条。 */
 .updateDetail {
-  margin: -6px 0 0;
-  padding: 8px 10px;
   font-size: 12px;
-  line-height: 1.6;
-  border-radius: 8px;
+  line-height: 1.5;
+  border-radius: 6px;
+  padding: 8px 10px;
   white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 150px;
+  word-break: break-all;
+  max-height: 160px;
   overflow-y: auto;
   user-select: text;
+  flex: none;
 }
 
 .updateDetailError {
-  color: var(--dsw-alias-state-error-primary);
   background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
 }
 
-/* 安装完成待重启的整段 overlay（updated 相位时替换面板全部内容）。 */
-.restartOverlay {
-  flex: 1;
-  min-height: 0;
+.intro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 停用面板两条处置路径之间的分隔线（harness 组 / 插件组）。 */
+.groupDivider {
+  width: 100%;
+  height: 0;
+  margin: 2px 0;
+  border: none;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* 命令药丸：边框方框只包等宽文本；复制按钮在方框外（.commandRow 行内并列）。
+   刻意不依赖官方组件（彼时官方包未必可用——停用面板渲染于 harness 版本
+   不兼容时），token 与 .button 同族。 */
+.commandRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.commandPill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  word-break: break-all;
+  padding: 5px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: transparent;
+}
+
+/* 配置编辑卡：边框容器（与更新提示条同族），内部表单纵排。 */
+.configCard {
+  flex: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
 }
 
-.restartOverlayTitle {
+.configTitle {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
-.restartOverlayText {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  max-width: 420px;
+.configActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 表单：标签在上、输入在下（与官方 Modal 表单同构）。 */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
   color: var(--dsw-alias-label-secondary);
+}
+
+.input {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+}
+
+.input:focus {
+  outline: 1px solid var(--dsw-alias-brand-primary);
+}
+
+.formError {
+  font-size: 12px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 通用小按钮——停用面板的复制按钮与更新条使用：停用面板渲染于 harness
+   版本不兼容时，刻意不依赖官方组件（彼时官方包未必可用）。 */
+.button {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.result {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  user-select: text;
 }

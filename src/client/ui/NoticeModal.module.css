@@ -1,0 +1,12 @@
+/* tone 观感层：只动语义色 token；几何与行为全部来自 Modal 复制件本体。
+   className 落在对话框卡片上（Modal 的 className 合并点）——danger/success
+   以边框表达语义。Modal 本体 .dialog 是 border: 0，此处用 element+class
+   （div.danger，特异性 0,1,1 > 0,1,0）确保覆盖生效，不依赖样式表加载顺序。 */
+
+div.danger {
+  border: 1px solid var(--dsw-alias-state-error-primary);
+}
+
+div.success {
+  border: 1px solid var(--dsw-alias-state-success-primary);
+}

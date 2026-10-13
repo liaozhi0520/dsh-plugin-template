@@ -1,0 +1,38 @@
+/* 可复制命令片样式：命令本体框（只装等宽文本，超长省略号截断——复制按钮
+   复制的永远是完整文本，与可见截断无关）+ 框外右侧的复制按钮；命令片整体
+   随内容自适应宽度、以容器为上限。颜色一律走 harness 设计令牌
+   （--dsw-alias-*，由 ui-theme 按主题写到 :root），明暗主题自动跟随；
+   禁止字面颜色。 */
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* 命令本体框：white-space: nowrap + overflow hidden + ellipsis——长 spec
+   省略性显示（不滚动、不出滚动条、不撑破容器）；宽度随内容自适应。 */
+.code {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 6px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  user-select: all;
+}
+
+/* 复制按钮（flex 默认不收缩）天然落在框外右侧。 */
+.chip > button {
+  flex: 0 0 auto;
+}

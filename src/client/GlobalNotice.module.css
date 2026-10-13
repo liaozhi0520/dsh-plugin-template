@@ -1,0 +1,20 @@
+/* 全局更新提示样式：仅 Modal 正文（Modal 框架样式由 ui/Modal 复制件负责）。
+   颜色一律走 harness 设计令牌
+   （--dsw-alias-*，由 ui-theme 按主题写到 :root），明暗主题自动跟随；
+   禁止字面颜色。 */
+
+/* Modal 正文：文案 + 命令框行纵向排列；命令框行随内容自适应宽度（不超过
+   弹窗可用宽度，长 spec 省略号截断——复制仍是完整文本），不铺满整行。 */
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.modalText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--dsw-alias-label-primary);
+}
