@@ -159,7 +159,7 @@ export function TemplateSection(props: TemplateSectionProps) {
   return (
     <div className={classes.section}>
       <div className={classes.headerRow}>
-        <h2 className={classes.title}>{t('title')}</h2>
+        <h2 className={classes.title}>{t('panelTitle')}</h2>
         {/* 插件更新条（右对齐）：版本徽标 + 状态词 + 动作按钮，保持一行紧凑。 */}
         <div className={classes.updateBar}>
           {update.currentVersion !== null && (

@@ -95,7 +95,7 @@ export function TemplateDisabledSection(props: TemplateDisabledSectionProps) {
 
   return (
     <div className={classes.disabledSection}>
-      <h2 className={classes.title}>{t('title')}</h2>
+      <h2 className={classes.title}>{t('panelTitle')}</h2>
       <p className={classes.intro}>{t('disabledTitle')}</p>
       <p className={classes.intro}>{reason !== '' ? reason : t('disabledFallback')}</p>
       {/* —— harness 组：支持窗口 + 当前版本 + 桌面版更新指引（desktop-only：

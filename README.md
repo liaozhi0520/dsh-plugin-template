@@ -71,6 +71,7 @@ npm** 或**推 GitHub** 供用户安装。
 | 位置 | 改成 |
 |---|---|
 | `src/client/locales.ts` 的 `title`（插件页卡片显示名；**zh/en 必须同值**——`scripts/gen-version.mjs` 构建期提取，不一致直接 build 报错） | 你的插件名 |
+| `src/client/locales.ts` 的 `panelTitle`（详情页设置面板标题，en 为 "Setting Panel of <插件名>"） | 你的面板标题 |
 | `src/client/locales.ts` 的 `TEMPLATE_NS`（`template.panel`）与 client 入口的 LocaleNamespaceMap 声明 | 你的 locale 命名空间（两处同源） |
 | `scripts/gen-version.mjs` 的 `BASE_DESCRIPTION` | 卡片描述基底文案（兼容窗口自动注入，不用写版本） |
 | `icon.svg` | 你的插件图标（「插件」页卡片读取） |

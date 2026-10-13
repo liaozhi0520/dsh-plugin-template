@@ -9,6 +9,8 @@
 export const en = {
   /** Section heading (configuration page on the Plugins page). */
   title: 'DSH Plugin Template',
+  // 详情页设置面板的标题（与卡片显示名区分：面板标题带 "Setting Panel of" 前缀）。
+  panelTitle: 'Setting Panel of DSH Plugin Template',
   intro:
     'This text comes from the client half of dsh-plugin-template. ' +
     'The page is registered on the Plugins page via the plugins.bundle.config slot.',
@@ -73,6 +75,8 @@ export const zh: Record<TemplatePanelKey, string> = {
   // title 是「插件」页卡片的显示名（gen-version 构建期提取、zh/en 须同值——
   // 卡片 title 取单一来源；插件名按专名处理，不随语言变）。
   title: 'DSH Plugin Template',
+  // 详情页设置面板的标题（与卡片显示名区分：面板标题带 "Setting Panel of" 前缀）。
+  panelTitle: 'DSH Plugin Template 设置面板',
   intro: '这段文字来自 dsh-plugin-template 的 client half。页面经 plugins.bundle.config 槽位注册在「插件」页本插件详情页。',
   ping: '调用 host',
   pinging: '调用中…',
