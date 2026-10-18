@@ -14,7 +14,7 @@
  * （不会撞上 installFailLoud 的进程级出口），且经 `webserver/index-inject`
  * 注入 DISABLED_GLOBAL，client 半改挂「已停用」说明面板（版本指引 +
  * 推荐 installVersion），而不是入口停摆后面板静默消失、或正常注册路径下
- * RPC 全挂的假活状态。strict 抛错开关（DSH_COMFYUI_BASED_TOOLS_STRICT=1）
+ * RPC 全挂的假活状态。strict 抛错开关（DSH_PLUGIN_TEMPLATE_STRICT=1）
  * 由各调用方在调本函数之前自行处理。
  *
  * 面板载荷的插件版本标识：同步从自身 package.json 读 name/version 进载荷

@@ -4,19 +4,25 @@
 > 进程内自更新安装通道（self-update.ts / updateSelf RPC / 更新条 / UpdateBubble）
 > 已随范式 dsh-comfyui-based-tools 0.8.0（bdcd8de）**整体删除**——根因是 Node ESM
 > 模块缓存缺陷（重装后进程内旧模块继续运行，自更新只会制造「新 UI + 旧内核」
-> 错配）。现行范式 = 卸载重装 + 版本提示弹窗（GlobalNotice/CommandChip）+
-> 陈旧代码提醒（StaleBanner/package-info/BUILD_VERSION），见 `AGENTS.md`
-> 硬约定与 `docs/compat-plan-0.2.0-rc.2.md`。本文 §1.1/§1.2 的版本兼容方法论
+> 错配）。现行范式 = 卸载重装（0.2.1 起免重启）+ 版本提示弹窗
+> （GlobalNotice/CommandChip），见 `AGENTS.md` 硬约定与
+> `docs/compat-plan-0.2.1-rc.2.md`。本文 §1.1/§1.2 的版本兼容方法论
 > 仍准确，全文仅作历史存档，不宜照其恢复自更新。
+>
+> ⚠️ **陈旧代码提醒亦已拆除（0.2.1-rc.2 迁移）**：原先接在版本提示旁边的
+> `StaleBanner` + `BUILD_VERSION` + `package-info` 三件套（§1.2 之后的补记、以及
+> 本文未覆盖的部分见 `docs/compat-plan-0.2.0-rc.2.md`）随上游修复整体删除——
+> 卸载 → 重装（不重启）由 harness 自行驱逐旧模块，2026-10-19 真机复核确认。
+> 现在只剩版本提示一条链路；`currentVersion` 保留作「当前版本」口径。
 
 > ⚠️ **窗口模型变迁注记（2026-09-12）**：本文写作时的窗口模型是
 > `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]` 双窗口（§1.2 的 peer 并集、
 > dev 钉线、特征探测、旧线冒烟均属该模型的方法论）。当前已收敛为
-> **双边界窗口 `[0.1.5-rc.1, 0.1.5-rc.3]`（同属 0.1.5 预发布线）**：
-> 门禁保持 `[MIN, MAX]` 比较、peer/dev 同值 `^0.1.5-rc.1`、默认零版本分支。
-> 现行写法见 `docs/compat-guide-0.1.2-to-0.1.5.md` 与 `AGENTS.md`；升级方案见
-> 派生插件任一份 `docs/dsh-0.1.5-rc.1-upgrade-report.md`。本文的 §1 提交解剖与
-> 自更新机制（§1.3/§4）仍准确，双线相关章节仅作历史方法论保留。
+> **双边界窗口 `[0.2.1-rc.1, 0.2.1-rc.2]`（同属 0.2.1 预发布线）**：
+> 门禁保持 `[MIN, MAX]` 比较、peer/dev 同值 `^0.2.1-rc.1`、默认零版本分支。
+> 现行写法见 `docs/compat-plan-0.2.1-rc.2.md` 与 `AGENTS.md`；升级方案见
+> 上一轮 `docs/compat-plan-0.2.0-rc.2.md`。本文的 §1 提交解剖与
+> 自更新机制（§1.3/§4）仅作历史方法论保留。
 
 > 依据：`dsh-meme-gen` 插件的完整演进史（git `41ecd61..2679ce8`），重点解剖三个提交——
 > `5cc0a0f` compat(0.1.1) 回退适配、`9684343` compat(0.1.2) 双线窗口、`4cd71dc` 设置面板自更新。

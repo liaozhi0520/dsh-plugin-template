@@ -15,7 +15,7 @@
  *   abbreviated packument 头（application/vnd.npm.install-v1+json）会被
  *   registry 以 406 拒绝（实测）；
  * - **accept-encoding 显式要 identity**：宿主全局 fetch 有"不解压压缩响应"
- *   的坑（见 ./json-body.ts 头注释 + AGENTS.md 坑 9），主动要明文可以让这条
+ *   的坑（见 ./json-body.ts 头注释 + docs/pitfalls.md §4），主动要明文可以让这条
  *   请求根本不经过压缩路径；万一 CDN 不认（或中间层强行压缩），
  *   readJsonBody 的按魔数自解压兜底；浏览器忽略该头（forbidden header，
  *   静默丢弃不抛错），浏览器 fetch 本来就正确解压。
@@ -25,7 +25,7 @@
  *   且不带 CORS 头（实测），client 半（停用面板自查）首个候选就会恒失败。
  *   **`fetch(url, { cache: 'no-store' })` 并不能规避**：实测 headless Chromium
  *   会照样把 `cache-control: no-cache` + `pragma: no-cache` 写进请求头（见
- *   AGENTS.md 坑 10）。故浏览器路径一个缓存指令都不加（`/latest` 自带
+ *   docs/pitfalls.md §5）。故浏览器路径一个缓存指令都不加（`/latest` 自带
  *   `max-age=300`，版本检查容忍几分钟陈旧；identity 变更本身也已换缓存键）；
  *   host 半（Node 没有 HTTP 缓存、也没有 CORS）经 noCache 显式加头；
  * - registry 类失败（网络/超时/HTTP 错误/响应缺 version）转问下一候选，
@@ -61,7 +61,7 @@ export interface RegistryLatestOptions {
   /**
    * true = 附加 `cache-control: no-cache` + `pragma: no-cache`，强制中间层
    * 不吃旧/坏缓存。**只允许 host 半传**：浏览器里这两个头不是 CORS-safelisted
-   * 头，会触发 OPTIONS 预检（见文件头注释 + AGENTS.md 坑 10）。
+   * 头，会触发 OPTIONS 预检（见文件头注释 + docs/pitfalls.md §5）。
    */
   noCache?: boolean
 }

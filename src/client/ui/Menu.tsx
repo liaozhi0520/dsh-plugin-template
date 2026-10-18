@@ -1,6 +1,6 @@
 /**
  * Menu：harness ui-primitives Menu 的**按用例裁剪复制件**。
- * 来源：c:/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx @ dsh-v0.2.0-rc.2。
+ * 来源：c:/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx @ dsh-v0.2.1-rc.2。
  * 本插件唯一用例（InstanceSelect 实例选择器）用到：portal 定位、align='end'、
  * 数据行（danger/图标/禁用）、label/separator 行、选中勾标、键盘行走（↑↓/Home/End）、
  * Escape/Tab/外点/iframe-blur 关闭、模态让位（isBehindModal）、组合输入守卫。
@@ -11,6 +11,11 @@
  * - 保留的 markup/classes/键盘行为与上游逐字一致；样式表同样裁剪至所用类
  *   （Menu.module.css）。样式隔离依赖 CSS Modules 哈希（[hash]_[local]），
  *   故保留上游局部类名以便 diff。
+ *
+ * 0.2.1-rc.2 复核（两 tag 的 Menu.tsx blob 相同）+ 修复：本文件 cleanup 曾把
+ * window blur 监听的清理误写成 addEventListener（上游两 tag 都是
+ * removeEventListener）——每次开关菜单泄漏一个常驻 window blur 监听；已改回，
+ * 现与上游逐字一致。
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
@@ -310,7 +315,7 @@ export function Menu({ open, anchor, items = [], selectedId, onSelect, onClose, 
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onOtherKey)
       document.removeEventListener('keydown', onEscape, true)
-      window.addEventListener('blur', onWindowBlur)
+      window.removeEventListener('blur', onWindowBlur)
     }
   }, [open, onClose, autoFocus])
 

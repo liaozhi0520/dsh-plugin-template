@@ -1,8 +1,8 @@
 /**
  * dsh-plugin-template, browser half: registers the demo configuration page on
  * the Plugins page (plugins.bundle.config, keyed by this bundle's package
- * name — 问候语编辑器 + ping 演示 + 插件更新条), and the two version-notice
- * entries on `shell.overlay`（NoticeModal）.
+ * name — 问候语编辑器 + ping 演示 + 插件更新条), and the version-notice entry
+ * on `shell.overlay`（NoticeModal）.
  * 数据经 host 半代理（template/*）读写。
  * 唯一生效路径 = `pnpm build` 后重启/重装 DeepSeek Harness（无热更工作流）。
  * host 半门禁软禁用时（index.html 注入了 DISABLED_GLOBAL 标记），本入口
@@ -27,7 +27,6 @@ import { checkUpdateViaHost, getConfigViaHost, getUpdateStateViaHost, pingHost, 
 import { TemplateSection, type TemplateSectionInjected } from './TemplateSection'
 import { TemplateDisabledSection, type TemplateDisabledSectionInjected } from './TemplateDisabledSection'
 import { GlobalNotice, type GlobalNoticeInjected } from './GlobalNotice'
-import { StaleBanner, type StaleBannerInjected } from './StaleBanner'
 
 export const name = 'dsh-plugin-template'
 export const inject = ['slots', 'locale', 'connection']
@@ -113,27 +112,13 @@ export function apply(ctx: ClientContext): void {
     ),
   )
 
-  // 版本提醒条目 ×2（shell.overlay，NoticeModal；各自独立生命周期与确认语义）：
-  // - StaleBanner（danger）：运行中模块自报版本 ≠ 构建期 BUILD_VERSION 时弹，
-  //   共提醒两次（第二次升级文案），见 StaleBanner.tsx；
-  // - GlobalNotice（neutral）：registry 检查 available 时弹新版本提示，
-  //   「我知道了」仅内存态关闭，见 GlobalNotice.tsx。
-  // 两条件同时成立时两个对话框按官方层栈叠放（关上层露下层）。软禁用早退
-  // 路径（上方）不注册——彼时无 RPC，停用面板已承担版本修复指引。
-  ctx.slots.inject('shell.overlay', () =>
-    ctx.slots.register(
-      {
-        name: 'shell.overlay',
-        id: 'template-stale-banner',
-        order: 100,
-        locale: TEMPLATE_NS,
-        inject: (): StaleBannerInjected => ({
-          api: { getUpdateState: () => getUpdateStateViaHost(connection.rpc) },
-        }),
-      },
-      StaleBanner,
-    ),
-  )
+  // 版本提醒条目（shell.overlay，NoticeModal · neutral）：registry 检查到
+  // available 时弹新版本提示，「我知道了」仅内存态关闭（见 GlobalNotice.tsx）。
+  // 【0.2.1 起】旧的「陈旧代码」danger 对话框（StaleBanner + BUILD_VERSION）已随
+  // 上游修复整体拆除：卸载 → 重装（不重启）由 harness 自己完成模块驱逐，不再出现
+  // 「新 UI + 旧内核」（2026-10-19 真机复核确认；取证见
+  // docs/harness-defect-workarounds.md 的历史防护回退块）。软禁用早退路径
+  // （上方）不注册本条目——彼时无 RPC，停用面板已承担版本修复指引。
   ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register(
       {

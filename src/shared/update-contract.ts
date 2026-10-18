@@ -13,12 +13,14 @@
  *
  * 插件更新策略（**自更新安装通道已删除**）：发现新版本只弹窗提示
  * 用户到「插件」页**卸载本插件后重新安装**；不提供任何进程内安装动作。
+ * 0.2.1 起该闭环还**免重启**（harness 在卸载/重装时自行驱逐旧模块，2026-10-19
+ * 真机复核确认）。
  *
- * 陈旧代码防护契约钉子：getUpdateState 快照的 `currentVersion` **恒填「运行中
- * 模块自报版本」**（package-info.ts 模块求值期缓存，不依赖检查成功）。client
- * 半将其与构建期烧录的 BUILD_VERSION 严格比较，不一致即渲染陈旧提醒对话框
- * 要求重启 harness（见 client StaleBanner 与 AGENTS.md「待复核的 harness
- * 缺陷规避」第二条）。改本契约占位必须两处同步。
+ * `currentVersion` 契约：getUpdateState 快照的该字段**恒填「运行中模块自报
+ * 版本」**（package-info.ts 模块求值期缓存，不依赖检查成功；旧 host 兼容形态下
+ * 可能检查完成后才填）——仅作为更诚实的「当前版本」口径，供提示文案与面板回显。
+ * 【0.2.1 起】**不再**有「与构建期基准严格比较做陈旧检测」这层用途：StaleBanner +
+ * BUILD_VERSION 已随上游修复整体拆除（见 docs/harness-defect-workarounds.md）。
  */
 
 /** 版本提示 RPC 端点（`<namespace>/<method>`；namespace 与 Typert 服务同源）。 */

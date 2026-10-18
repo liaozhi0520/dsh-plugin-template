@@ -17,7 +17,7 @@
  *   `profileContext.name === 'desktop'` 是桌面版的稳定指纹。
  *
  * 失败语义与 version-gate.ts 同构：门禁只抛错，由调用方决定软禁用还是
- * fail-loud（DSH_COMFYUI_BASED_TOOLS_STRICT=1，见 index.ts）。
+ * fail-loud（DSH_PLUGIN_TEMPLATE_STRICT=1，见 index.ts）。
  */
 import type { Context } from '@deepseek-ai/cordis'
 

@@ -5,15 +5,16 @@
  * 0c) 客户端配置页 key 守护：lib/client.js 的 plugins.bundle.config 注册 key
  *     与模块加载器 banner 的 bundle id 都必须逐字等于 package.json 的 name
  *     （写错 = 「插件」页配置区静默不出现，keyed 槽位不匹配无报错）；
- * 0d) 陈旧代码防护构建面守护：src/client/build-version.ts（gen-version.mjs 生成）
- *     与 lib/client.js 内嵌串、package.json version 三者一致；
+ * 0d) 【已退役，编号留空】原「陈旧代码防护构建面守护」——0.2.1 起 StaleBanner +
+ *     BUILD_VERSION 整体拆除（上游已修：卸载重装不重启由 harness 自行驱逐旧
+ *     模块，2026-10-19 真机确认），不要再加回来；
  * 0g) 包显示元数据守护：locale/{zh,en}.json（gen-version.mjs 生成）的 title
  *     与 locales.ts 词典同源、description 携带当前 [MIN,MAX] 兼容窗口；
  * 6a) 版本门禁桌面单锚（临时目录树复现 desktop spawn 形态：argv[2] = runtimeDir
  *     → runtime 内 @deepseek-ai/dsh；锚点落空 / 包身份不符 → 抛错）；
- * 6f) package-info 求值期缓存（陈旧代码防护的 host 半事实源）+ update-state
+ * 6f) package-info 求值期缓存（「运行中代码版本」的事实源）+ update-state
  *     四相状态机（stub registry：available / up-to-date / 启动静默失败 / 手动
- *     检查内联报错）+ StaleBanner/GlobalNotice 严格不等契约钉子（无豁免分支）；
+ *     检查内联报错）；
  * 7)  自更新退役契约：checkUpdate/getUpdateState 在位，updateSelf 通道零残留
  *     （host 端点表与 client bundle 双侧钉死）。
  */
@@ -138,22 +139,13 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// 0d) 陈旧代码防护的构建面守护：package.json version / src/client/build-version.ts
-//     / lib/client.js 内嵌串三者一致。发版 bump version 后跑一次 build 即全量
-//     重生成；漏跑 = 本节 FAIL（0.8.6 真实踩坑形态，pre-commit 是其快速闸门）。
+// 0d) 【已退役，编号留空】陈旧代码防护的构建面守护（package.json version /
+//     src/client/build-version.ts / lib/client.js 内嵌 BUILD_VERSION 三处一致）。
+//     0.2.1 起该防护（StaleBanner + BUILD_VERSION）随上游修复整体拆除——卸载
+//     → 重装不重启由 harness 自行驱逐旧模块，2026-10-19 真机复核确认；取证见
+//     docs/harness-defect-workarounds.md 的历史防护回退块。**不要再加回来**。
+//     编号保留空位只为不打乱 0g 等既有引用。
 // ---------------------------------------------------------------------------
-{
-  const buildVersionSource = readFileSync(new URL('../src/client/build-version.ts', import.meta.url), 'utf8')
-  check(
-    `build-version: src/client/build-version.ts 与包清单一致（${manifest.version}）`,
-    buildVersionSource.includes(`export const BUILD_VERSION = ${JSON.stringify(manifest.version)}`),
-  )
-  const clientSource = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
-  check(
-    'build-version: lib/client.js 内嵌 BUILD_VERSION（StaleBanner 陈旧判定基准）',
-    clientSource.includes(JSON.stringify(manifest.version)),
-  )
-}
 
 // ---------------------------------------------------------------------------
 // 0g) 包显示元数据守护：locale/{zh,en}.json 是「插件」页卡片静态读取的显示
@@ -201,11 +193,11 @@ try {
     const dshDir = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh')
     mkdirSync(dshDir, { recursive: true })
     const manifestPath = join(dshDir, 'package.json')
-    writeFileSync(manifestPath, JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.2.0-rc.2' }))
+    writeFileSync(manifestPath, JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.2.1-rc.2' }))
     const resolved = resolveHarnessVersion(['node', 'lib/index.js', runtimeDir])
     check(
       `version anchor: argv[2]=runtimeDir → ${resolved.version}（anchor ${resolved.anchor}）`,
-      resolved.version === '0.2.0-rc.2' && resolved.anchor === `desktop:${manifestPath}`,
+      resolved.version === '0.2.1-rc.2' && resolved.anchor === `desktop:${manifestPath}`,
     )
     // 非 harness 包身份：name 校验兜底拒绝（防误读插件自身依赖副本）。
     writeFileSync(manifestPath, JSON.stringify({ name: '@evil/lookalike', version: '9.9.9' }))
@@ -230,12 +222,13 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// 6f) package-info 求值期缓存 + update-state 四相状态机（stub registry）+
-//     StaleBanner/GlobalNotice 严格不等契约钉子。
+// 6f) package-info 求值期缓存 + update-state 四相状态机（stub registry）。
+//     【0.2.1 起】原先还在这里守护「StaleBanner 用严格不等比较 currentVersion 与
+//     BUILD_VERSION」的判定契约；该防护已随上游修复整体拆除（见 0d 的退役说明）。
 // ---------------------------------------------------------------------------
 {
   // package-info：模块求值期一次性读自身包清单并缓存（= 正在运行的代码版本；
-  // 推迟到首调才读会把重装后的磁盘新包谎报成运行版本，陈旧检测失明）。
+  // 推迟到首调才读会把重装后的磁盘新包谎报成运行版本，快照里的「当前版本」就是假的）。
   const info = selfPackageInfo()
   check(
     `package-info: selfPackageInfo = ${info.name}@${info.version}（求值期缓存 = 运行中自报版本）`,
@@ -305,18 +298,9 @@ try {
   )
   globalThis.fetch = realFetch
 
-  // ④ client 半契约钉子（源码级）：StaleBanner 严格不等、无豁免分支；
-  //    GlobalNotice 在 stale 时让位（stale 优先）。
-  const staleSource = readFileSync(new URL('../src/client/StaleBanner.tsx', import.meta.url), 'utf8')
-  const noticeSource = readFileSync(new URL('../src/client/GlobalNotice.tsx', import.meta.url), 'utf8')
-  check(
-    'stale contract: StaleBanner 用严格不等比较 running ≠ BUILD_VERSION（无豁免分支）',
-    staleSource.includes('runningVersion !== BUILD_VERSION') && !staleSource.includes('=== BUILD_VERSION'),
-  )
-  check(
-    'stale contract: GlobalNotice stale 让位（available 弹窗被 stale 压制）',
-    noticeSource.includes('&& !stale'),
-  )
+  // ④ 【0.2.1 起已退役】原「StaleBanner 严格不等 / GlobalNotice stale 让位」两条
+  //    源码级契约钉子随陈旧检测整体拆除（见 0d）；本节点只保留状态机与
+  //    package-info 求值期缓存断言。
 }
 
 // ---------------------------------------------------------------------------

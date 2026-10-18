@@ -92,7 +92,7 @@ export async function saveConfigViaHost(rpc: ClientConnectionRpc, value: Templat
  * 读 host 半版本状态快照（配置页更新条与全局提示弹窗共用）。
  * host 状态机是唯一权威源（见 src/update-state.ts）：client 不持有更新状态，
  * 失败（含旧版 host 无此端点的自举窗口）由调用方静默降级，不打断渲染。
- * currentVersion 恒填运行中模块自报版本（陈旧代码防护的事实源）。
+ * currentVersion 恒填运行中模块自报版本（「当前版本」的诚实口径）。
  */
 export async function getUpdateStateViaHost(rpc: ClientConnectionRpc): Promise<OpResult<UpdateMachineState>> {
   const result = await callTemplate<{ ok: boolean; state?: UpdateMachineState; error?: { code?: string; message?: string } }>(

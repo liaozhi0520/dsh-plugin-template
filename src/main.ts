@@ -16,8 +16,9 @@
  * - 后端服务：TemplateRemote（ping 演示 + 配置读写 + 版本提示端点），实现见
  *   ./remote.ts，端点声明见 ./remote.ts 的 DESCRIPTORS；
  * - 插件版本提示：registry latest 检查（状态机见 ./update-state.ts）+ 运行中
- *   模块自报版本（./package-info.ts，client 半陈旧代码检测的事实源）。
- *   无安装动作——发现新版本仅提示用户到「插件」页卸载后重装。
+ *   模块自报版本（./package-info.ts，即「当前版本」的诚实口径）。0.8.0 起
+ *   无安装动作——发现新版本仅提示用户卸载后重装（0.2.1 起该闭环免重启：
+ *   harness 在卸载/重装时自行驱逐旧模块）。
  *
  * 浏览器经 `ctx.connection.rpc.call('/api', 'template/<method>')` 调用，
  * 由 Typert Gateway 按描述符分发到服务实例。

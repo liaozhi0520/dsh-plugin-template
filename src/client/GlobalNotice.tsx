@@ -4,16 +4,14 @@
  * 置内存态关闭本次窗口——零持久化，下次启动 DSH（重新挂载）若仍未更新则重新
  * 弹出（浏览器刷新同样重弹，in-memory 语义）。
  *
- * 陈旧代码提醒是**另一条独立槽位条目**（StaleBanner.tsx，danger 观感 + 两次
- * 提醒语义），数据源相同（template/getUpdateState）但生命周期各自独立。
- * **stale 优先**：running ≠ BUILD_VERSION（重装未重启）时本条目让位——此刻
- * 用户已装新版、只差重启，「安装新版本」的更新文案是误导，danger 陈旧对话
- * 框先出；stale 消失（重启后版本一致）而 available 仍成立时，本条目正常弹出。
- * 让位是本组件自检（轮询数据里就有 currentVersion，与构建期 BUILD_VERSION
- * 比较），无需两组件互相耦合。
+ * 【0.2.1 起】原「陈旧代码提醒」条目（StaleBanner.tsx，danger + 两次提醒）及
+ * 其「stale 优先让位」逻辑已整体拆除：卸载 → 重装（不重启）由 harness 自己
+ * 完成模块驱逐，不再出现「新 UI + 旧内核」（2026-10-19 真机复核确认，取证见
+ * docs/harness-defect-workarounds.md 的历史防护回退块）。本组件因此不再读
+ * 构建期基准，只按 available 相位弹窗。
  *
- * 误报防线：currentVersion 为 null（旧 host 检查未成功 / 包损坏）不弹；轮询
- * 有界（2s × 10），不在后台无限重试。
+ * 误报防线：currentVersion 为 null（旧 host 检查未成功 / 包损坏）不影响本组件
+ * （只用于正文回显）；轮询有界（2s × 10），不在后台无限重试。
  */
 import { useEffect, useState } from 'react'
 import { Button } from './ui/Button'
@@ -21,7 +19,6 @@ import { NoticeModal } from './ui/NoticeModal'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpResult, UpdateMachineState } from './api'
 import { BUNDLE_KEY } from './bundle-key'
-import { BUILD_VERSION } from './build-version'
 import { CommandChip } from './CommandChip'
 import classes from './GlobalNotice.module.css'
 
@@ -71,17 +68,13 @@ export function GlobalNotice(props: GlobalNoticeProps) {
     }
   }, [api])
 
-  const runningVersion = snapshot?.currentVersion ?? null
-  // stale 优先（用户裁定，恢复 v7 语义）：重装未重启时 running ≠ BUILD_VERSION，
-  // 此刻「安装新版本」的更新文案是误导（用户已装，只差重启）→ 本条目让位，
-  // 由 StaleBanner 的 danger 对话框接管。runningVersion 为 null（旧 host /
-  // 包损坏）不算 stale、不让位（保守：available 提示照常）。
-  const stale = runningVersion !== null && runningVersion !== BUILD_VERSION
+  // 【0.2.1 起】不再有「stale 让位」判定：陈旧检测（StaleBanner + BUILD_VERSION）
+  // 已随上游修复整体拆除，重装未重启不再出现「新 UI + 旧内核」，故本组件只按
+  // available 相位弹窗（currentVersion 仅用于正文回显「当前/最新」）。
   const updateOpen = snapshot !== null
     && snapshot.phase === 'available'
     && snapshot.latestVersion !== null
     && !dismissed
-    && !stale
 
   return (
     <NoticeModal

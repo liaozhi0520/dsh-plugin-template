@@ -6,13 +6,19 @@
  * 独立成模块而非留在 update-state：薄门禁入口（index.ts）的静态 import 图只需要
  * 「读包版本」这一件事——本模块只用 node:fs/node:path/node:url。
  *
- * 缓存语义（**陈旧代码防护的基石**）：模块求值期（import 时）一次性读取并缓存。
- * 模块体执行的时刻 = 本进程加载这段代码的时刻，因此缓存值严格等于「正在运行的
- * 代码版本」。若推迟到首次调用才读，会掉进这个窗口：进程启动后、首次调用前，
- * 用户卸载并重装了插件（Node ESM 模块缓存让旧模块继续运行，磁盘却是新包）——
- * 那时读磁盘会把运行中的旧模块谎报成新版本，陈旧检测失明。读取失败缓存 null
- * （包损坏），`selfPackageInfo()` 调用时延迟抛错——不让入口 import 失败，保住
- * 软禁用路径（index.ts 的两道门禁依赖本模块）。
+ * 缓存语义（**「运行中代码版本」的基石**）：模块求值期（import 时）一次性读取
+ * 并缓存。模块体执行的时刻 = 本进程加载这段代码的时刻，因此缓存值严格等于
+ * 「正在运行的代码版本」。若推迟到首次调用才读，会掉进这个窗口：进程启动后、
+ * 首次调用前，用户卸载并重装了插件（Node ESM 模块缓存让旧模块继续运行，磁盘
+ * 却是新包）——那时读磁盘会把运行中的旧模块谎报成新版本，快照里的「当前版本」
+ * 就是假的。读取失败缓存 null（包损坏），`selfPackageInfo()` 调用时延迟抛错
+ * ——不让入口 import 失败，保住软禁用路径（index.ts 的两道门禁依赖本模块）。
+ *
+ * 【0.2.1 起】这份求值期缓存**只**服务于「当前版本」的诚实口径（版本提示文案
+ * 与停用面板回显）；原「client 半拿它与构建期 BUILD_VERSION 严格不等做陈旧
+ * 代码检测」那一层已随上游修复整体拆除（harness 在卸载/重装时自行驱逐旧模块，
+ * 2026-10-19 真机复核确认），不要再加回来——取证见
+ * docs/harness-defect-workarounds.md 的历史防护回退块。
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -54,7 +60,7 @@ export function selfPackageInfo(): SelfManifest {
 
 /**
  * 运行中模块自报版本；包损坏时为 null（getUpdateState 快照的 currentVersion
- * 口径——快照读取不允许抛错，null 让 client 半陈旧检测静默不弹）。
+ * 口径——快照读取不允许抛错，null 时前端按「版本未知」回显）。
  */
 export function selfVersionOrNull(): string | null {
   return cachedManifest?.version ?? null

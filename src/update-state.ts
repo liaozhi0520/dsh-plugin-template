@@ -11,14 +11,15 @@
  *
  * 更新策略（0.8.0 起）：**插件不再自更新**——原官方 pluginManager 安装通道
  * （installBundle/cancelInstall/流式日志/junction 清理）整段删除。发现新版本
- * 仅提示用户「到插件页卸载本插件后重新安装」。原因：重装后 harness 进程内的
- * 旧模块实例不会被替换（Node ESM 模块缓存缺陷，取证与追新复核见 AGENTS.md
- * 「待复核的 harness 缺陷规避」第二条），自更新只会制造「已装待重启」的中间态
- * 与「新 UI + 旧内核」的错配；卸载重装 + 本插件的陈旧提醒对话框才是完整闭环。
+ * 仅提示用户「到插件页卸载本插件后重新安装」（0.2.1 起这条闭环还免重启：
+ * harness 自身会在卸载/重装时驱逐旧模块，2026-10-19 真机复核确认）。
  *
  * 快照钉子：`currentVersion` **恒填「运行中模块自报版本」**（package-info.ts
- * 模块求值期缓存，`selfVersionOrNull()`；不依赖检查成功）。client 半用它与
- * 构建期 BUILD_VERSION 做陈旧检测（严格不等 → 陈旧提醒对话框要求重启）。
+ * 模块求值期缓存，`selfVersionOrNull()`；不依赖检查成功）——它只是更诚实的
+ * 「当前版本」口径，供提示文案与面板回显使用。
+ * 【0.2.1 起】client 半**不再**拿它与构建期基准做陈旧检测：StaleBanner +
+ * BUILD_VERSION 已随上游修复整体拆除（取证见 docs/harness-defect-workarounds.md
+ * 的历史防护回退块）。
  */
 import { selfPackageInfo, selfVersionOrNull } from './package-info.js'
 import { FALLBACK_REGISTRY_CANDIDATES, fetchLatestVersion } from './shared/registry-latest.js'

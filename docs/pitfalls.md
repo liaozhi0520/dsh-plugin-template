@@ -66,9 +66,35 @@ tsdown `deps.alwaysBundle` 显式打进 client（范式 three 的踩坑记录）
 
 `package.json` 的 `dsh.bundle` / `dsh.client`（含 `inject` 列表）在 harness
 侧有扫描缓存，**改它必须重启 harness** 才生效；`lib/` 内容变化才会走产物
-替换。inject 列表必须与 peer/neverBundle 同步维护（0.2.0 包集）。
+替换。inject 列表必须与 peer/neverBundle 同步维护（0.2.1 包集）。
 
-## 8. Windows core.autocrlf=true 会弄坏 git 钩子
+### 7b. 别追 dsh-* 声明文件里的跨包 `import type`（`skipLibCheck` 是上游前提）
+
+症状：`node_modules/@deepseek-ai/dsh-*/lib/types/**` 里会 `import type` 到模板
+**没声明**的包（0.2.1 实测：`ui-plugin-manager` → `dsh-api-remotes/client`、
+`ui-slots`/`ui-layout` → `dsh-client-store`、`dsh-llm` → `dsh-attachment`），
+而 `pnpm peers check` 与 `tsc` 都不报错。
+
+**原因**：`tsconfig.json` 的 `skipLibCheck: true` 跳过 `.d.ts` 内部检查（含其
+import 解析）。上游把这些包全部放在**自己的 devDependencies**（`workspace:*`），
+peer 里只有 `cordis`——这是 harness 的惯例，不是本模板的缺口。
+
+**纪律：不要为它补 devDep、更不要关 `skipLibCheck`。** 实测（0.2.1-rc.2）：
+补齐 4 个包后关掉 `skipLibCheck`，错误数 16 → 16（换成了
+`dsh-api-gateway/client`、`dsh-plugin-manager/types` 等 13 个更下游的包，
+`dsh-api-remotes` 是网关面聚合包，链条无限）。
+
+**代价边界**：`skipLibCheck` 只跳过库内部检查，不影响对外类型面——实测
+`PropsRuntime<'plugins.bundle.config'>` 的 `view` 仍精确为 `'summary' | 'page'`、
+`form` 仍是 `ConfigPageForm | undefined`；**唯一退化**是
+`PluginPackageRef.availability → any`。真要用到那个字段时，在**自己代码里**本地
+声明联合类型并断言，别去动依赖面。完整取证见
+`docs/compat-plan-0.2.1-rc.2.md` §7.1。
+
+## 8. Windows core.autocrlf=true 会弄坏 git 钩子（历史注记）
+
+> **本模板 0.2.1 起已无 git 钩子**（`.githooks/pre-commit` 随陈旧检测拆除）。
+> 若将来重新引入任何 `sh` 钩子，这条坑仍然成立，照下面的做法处理。
 
 checkout 时 LF→CRLF，`.githooks/pre-commit` 的 shebang 变 `#!/bin/sh\r`——
 钩子**静默失效**（不报错、不执行），版本一致性闸门形同虚设。`.gitattributes`
@@ -81,16 +107,24 @@ app-boot 的插件兼容预检按 `semver.satisfies(runtime, peerRange,
 { includePrerelease: true })` 放行；`^0.1.5-rc.1` 在 0.2.0 runtime 上不满足
 → 插件行直接 disabled、代码不会被 import。跨 minor 迁移必须**同轮**重写全部
 peer/dev 到新线（单点窗口），不存在「靠范围夹住两条线」的写法（OR 并集被
-AGENTS.md 硬约定禁止）。
+AGENTS.md 硬约定禁止）。**tuple 变化同样命中**：`^0.2.0-rc.1` 对 `0.2.1-rc.2`
+在默认解析语义下也是 false（0.2.1 迁移实测），故 MIN 上移时依赖下限必须同轮改写。
 
-## 10. 发版漏 build = 每用户每次启动误报「陈旧代码」
+## 10. 发版漏 build（0.2.1 起只影响卡片窗口文案）
 
-BUILD_VERSION（烧进 client bundle）与 currentVersion（运行中 host 模块自报）
-严格不等即弹 StaleBanner。bundle 烧旧版 + 包清单新版 → 每个用户每次启动都被
-误报。防线：`version` 生命周期脚本自动烧录 + pre-commit 闸门 +
-smoke 0d。bump 用 `pnpm version patch --no-git-tag-version`（生命周期脚本
-argv 为空、`npm_package_version` 已是新值；`pnpm run version` 只直跑脚本
-**不 bump**，属误用）；`pnpm version` 要求干净工作树。
+> **0.2.1 起「陈旧代码误报」这一事故形态已随检测拆除**（上游修复了
+> 「卸载重装不重启跑旧模块」）。剩下的影响只有一个：`locale/{zh,en}.json` 的
+> 兼容窗口文案停在旧值（smoke 0g 会 FAIL）。仍然必须「改 `version-gate.ts` 或
+> bump version 后跑一次 build」。
+
+历史形态（供追溯）：`BUILD_VERSION`（烧进 client bundle）与 `currentVersion`
+（运行中 host 模块自报）严格不等即弹 `StaleBanner`，bundle 烧旧版 + 包清单新版
+→ 每个用户每次启动都被误报。当时的防线是 `version` 生命周期脚本自动烧录 +
+pre-commit 闸门 + smoke 0d——三者已全部删除（**不要再加回来**）。
+
+bump 用 `pnpm version patch --no-git-tag-version`（生命周期脚本 argv 为空、
+`npm_package_version` 已是新值；`pnpm run version` 只直跑脚本**不 bump**，属
+误用）；`pnpm version` 要求干净工作树。
 
 ## 11. pnpm 无法用 registry 版本直接覆盖 link 依赖
 
@@ -121,19 +155,34 @@ npm 侧自报 HttpErrorAuthUnknown）→ E401。
 再追问——**原仓库里这条路径真的被执行过吗**（publish: $all 会让鉴权代码变成
 从未运行的死角）。
 
-## 13. 「固定次数」轮询预算在快失败场景下会缩水；后台进程日志被 taskkill /F 吞掉
+## 13. 轮询预算会缩水；后台 verdaccio 的日志被 DETACHED_PROCESS 静默丢弃
 
-`waitForRegistry` 曾写「25 次探测 × 600ms」当 30s 预算用——端口未监听时 fetch
-是瞬间失败（ECONNREFUSED），实际预算只有 ~15s：verdaccio 热启动 2s 就绪（掩盖
-问题），冷启动（当日首次拉起，Defender 扫描 + 依赖预热）实测超 15s → 误报
-「30s 内未就绪」。修法：**预算按时间计**（`Date.now() + 60_000`），轮询中途
-检测子进程退出码（提前退出 = 配置/环境问题，立即报错不等预算），启动前先
-预检端口（已被占用 → 秒级报错 + 自救指引，不空转）。
+**预算**：`waitForRegistry` 曾写「25 次探测 × 600ms」当 30s 预算用——端口未监听时
+fetch 是瞬间失败（ECONNREFUSED），实际预算只有 ~15s：verdaccio 热启动 2s 就绪
+（掩盖问题），冷启动（当日首次拉起，Defender 扫描 + 依赖预热）实测超 15s → 误报
+「30s 内未就绪」。修法：**预算按时间计**（`Date.now() + 60_000`）。
 
-同族坑：verdaccio 以 `detached + stdio 重定向到文件` 后台启动时，其 stdout
-日志在缓冲里，**taskkill /F 会让文件恒为空**——「查看日志」永远看不到东西。
-修法：verdaccio 配置加 `log: { type: file, path: …, level: http }` 让它自己
-落盘（6.10 实测接受该键，启动即写 config/plugin 行）。
+**日志被吞（真因，2026-10-19 修复）**：`spawn(..., { detached: true, shell: true,
+stdio: ['ignore', log, log] })` 在 Windows 上只让**直接子进程**拿到 stdio 句柄，
+孙进程（verdaccio 实际跑在 `node bin/verdaccio`）拿到的是**无效句柄** → 输出被
+静默丢弃。实测：verdaccio 正常监听、`/` 返回 200，日志仍恒为 **0 字节**——故障时
+等于把唯一证据扔了。修法（范式 `70a09e8`，本模板已迁移）：
+
+1. **启动形态**：`spawn(process.execPath, [binPath, '--config', CONFIG_PATH], {
+   stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })` + `writeSync(log, chunk)`
+   把两条管道落盘；bin 入口**经包清单 `bin` 字段解析**（`require.resolve('verdaccio/package.json')`
+   → `join(dirname(...), manifest.bin.verdaccio)`）——不能直接 resolve
+   `verdaccio/bin/verdaccio`，包的 `exports` 不放行该子路径。
+2. **生命周期监听**：`on('error')` / `on('exit')` 记录事实，探测循环**发现启动即死
+   立即判死**（原来「启动即死」与「还在启动」在脚本眼里一模一样，只能白等满预算），
+   并把日志尾部（`verdaccioLogTail()`）贴进错误信息。
+3. **探测可诊断**：逐次记录失败原因与耗时，非 2xx 也报状态码；超时文案改
+   「已等待 Xs；最后一次探测：…」+ 日志尾部。
+4. 配置里的 `log: { type: file }` 段**随之删除**（管道已能落盘，两套日志只会打架）。
+
+**实测（本模板复现）**：同 spawn 形态 + 独立端口 4899 → **2.0s 就绪**、日志
+**431 字节 / 6 行**（含 `http address` 行）；对照旧 `detached + shell` 形态同条件
+0 字节。
 
 ## 14. 生成 verdaccio 配置的两个致命细节（@ 保留指示符 + 相对路径解析基准）
 
@@ -150,7 +199,6 @@ verdaccio 6.10 实测（test-version-bump 三连坑的最终形态）：
    "using htpasswd file: …嵌套…\htpasswd"）：脚本播种的 htpasswd 失效、storage
    与脚本资产混层。修法：**生成的配置里所有路径一律绝对化**
    （`JSON.stringify(join(...))` 产出的双引号 YAML 串转义正确）。
-3. 诊断手法沉淀：verdaccio 自己的 file log（`log: { type: file }`）会打印
-   每个插件实际加载的路径——「配置里写的路径」与「插件实际用的路径」对不上
-   时一眼现形；配合 `log error lines` 抓 `cannot open config file` 的真实
-   err.stack（`CONFIG_NOT_VALID` 的 else 分支会打 `: false`，别被它带偏）。
+3. 诊断手法沉淀：verdaccio 自己打印的每行加载日志（现在经管道落盘，见 §13）会写明
+   每个插件实际加载的路径——「配置里写的路径」与「插件实际用的路径」对不上时一眼
+   现形（实测 `using htpasswd file: <绝对路径>` 直接暴露嵌套目录问题）。

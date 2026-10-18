@@ -1,6 +1,6 @@
 /**
  * 1:1 复制自 harness ui-primitives（c:/deepseek-harness/packages/client/ui-primitives/src/Switch.tsx，
- * @ dsh-v0.2.0-rc.2）。追新时逐行 diff 复核。
+ * @ dsh-v0.2.1-rc.2）。追新时逐行 diff 复核。
  */
 
 // Switch: two-state toggle. `label` is required and has no default, so a render

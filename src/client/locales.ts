@@ -35,7 +35,7 @@ export const en = {
   disabledPluginCurrent: 'Installed plugin version: {installed}.',
   disabledPluginChecking: 'Latest plugin version: checking…',
   disabledPluginLatestUnknown: 'Latest plugin version: unknown (offline? refresh to retry).',
-  disabledPluginOutdated: 'A newer plugin release is available (update it on the dsh plugins page or install it manually, then restart):',
+  disabledPluginOutdated: 'A newer plugin release is available (uninstall and reinstall it on the Plugins page — the new version takes effect immediately, no restart needed):',
   disabledPluginUpToDate: 'The installed plugin is the latest release.',
   disabledDesktopUpdate: 'Please update or downgrade the DeepSeek desktop app to {version} (its bundled harness is the same version), or install a plugin release compatible with it.',
   disabledCopy: 'Copy',
@@ -46,25 +46,16 @@ export const en = {
   updateChecking: 'Checking…',
   updateUpToDate: 'Up to date',
   updateAvailable: 'New version {version}',
-  updateAvailableHint: 'uninstall this plugin on the Plugins page and reinstall the latest release.',
+  updateAvailableHint: 'uninstall this plugin on the Plugins page and reinstall the latest release — it takes effect immediately, no restart needed.',
   updateCheckFailed: 'Check failed',
   // --- 新版本提示弹窗（shell.overlay 槽位条目，NoticeModal；「我知道了」仅
   // 关闭本次窗口，下次启动 DSH 若仍未更新则重新弹出） ---
   updateModalTitle: 'New version of {name} is available',
-  updateModalText: 'A new version of this plugin is available: {latest} (current {current}). Please uninstall this plugin on the Plugins page and reinstall the latest release.',
+  updateModalText: 'A new version of this plugin is available: {latest} (current {current}). Please uninstall this plugin on the Plugins page and reinstall the latest release; it takes effect immediately, without restarting DeepSeek Harness.',
   updateModalAck: 'Got it',
   // 安装 spec 命令片（插件包名@最新版本，弹窗与配置页更新条共用）。
   updateSpecCopy: 'Copy',
   updateSpecCopied: 'Copied!',
-  // --- 陈旧代码提醒（shell.overlay 槽位条目，非阻断）：运行中模块自报版本
-  // ≠ 构建期 BUILD_VERSION 时弹出，共提醒两次——第一次说明 + 「我知道了」（5 秒
-  // 后重弹），第二次升级文案 + 「当前我没有使用此插件，无需立即重启」（关闭后
-  // 不再提醒）。不用全屏阻断——插件无权锁死宿主，防护误报须可挽回。 ---
-  staleBannerTitle: '{name}: plugin code does not match the installed version',
-  staleBannerText: 'Running code is v{running} but installed is v{installed}. Restart DeepSeek Harness to load the installed version.',
-  staleBannerAck: 'Got it',
-  staleBannerTextFinal: 'Please restart DeepSeek Harness now — continuing to use this plugin may cause unexpected behavior.',
-  staleBannerAckFinal: 'I am not using this plugin right now; no need to restart yet.',
 } as const
 
 /** The template.panel namespace key union. */
@@ -97,7 +88,7 @@ export const zh: Record<TemplatePanelKey, string> = {
   disabledPluginCurrent: '插件当前安装版本：{installed}。',
   disabledPluginChecking: '最新版本：检查中…',
   disabledPluginLatestUnknown: '最新版本：未能确认（可能离线，可稍后刷新重试）。',
-  disabledPluginOutdated: '插件有新版本（可在 DeepSeek 插件页更新或手动安装后重启）：',
+  disabledPluginOutdated: '插件有新版本（在 DeepSeek 插件页卸载后重新安装即可，新版本即刻生效、无需重启）：',
   disabledPluginUpToDate: '插件已是最新版本。',
   disabledDesktopUpdate: '请将 DeepSeek 桌面版更新/降级至 {version}（其内置 harness 即该版本），或安装与该桌面版兼容的插件版本。',
   disabledCopy: '复制',
@@ -107,18 +98,13 @@ export const zh: Record<TemplatePanelKey, string> = {
   updateChecking: '检查中…',
   updateUpToDate: '已是最新',
   updateAvailable: '新版本 {version}',
-  updateAvailableHint: '请在「插件」页卸载本插件后重新安装最新版本。',
+  updateAvailableHint: '请在「插件」页卸载本插件后重新安装最新版本——新版本即刻生效，无需重启。',
   updateCheckFailed: '检查失败',
   updateModalTitle: '发现插件新版本：{name}',
-  updateModalText: '插件有新版本：{latest}（当前 {current}）。请在「插件」页卸载本插件后重新安装最新版本。',
+  updateModalText: '插件有新版本：{latest}（当前 {current}）。请在「插件」页卸载本插件后重新安装最新版本——新版本即刻生效，无需重启。',
   updateModalAck: '我知道了',
   updateSpecCopy: '复制',
   updateSpecCopied: '已复制！',
-  staleBannerTitle: '{name}：插件代码与已安装版本不一致',
-  staleBannerText: '运行中代码 v{running}，已安装 v{installed}。请重启 DeepSeek Harness 加载已安装版本。',
-  staleBannerAck: '我知道了',
-  staleBannerTextFinal: '请立即重启 DeepSeek Harness，如果再继续使用此插件有可能会造成异常。',
-  staleBannerAckFinal: '当前我没有使用此插件，无需立即重启',
 }
 
 /** Locale namespace owned by this plugin. */

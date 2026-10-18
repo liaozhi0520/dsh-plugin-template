@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 本地版本 bump 测试台（Verdaccio）——「版本提示」弹窗（available / stale）的端到端验证。
+ * 本地版本 bump 测试台（Verdaccio）——「版本提示」弹窗（available）与「卸载重装免重启生效」的端到端验证。
  *
  * 用法（`pnpm test-version-bump --help` 打印同一份说明）：
  *   pnpm test-version-bump                                    交互式：先选模式（缺省 bump）
@@ -12,7 +12,7 @@
  * 两种模式的差别只在「两个被测版本从哪来」：
  *
  * ① bump 模式（缺省，工作区）：版本 A = 工作区当前 package.json version，版本 B = A 的
- *    patch+1——同一个工作区构建两次（第二次构建把新版本烧进 client 的 BUILD_VERSION，
+ *    patch+1——同一个工作区构建两次（第二次构建把新版本烧进 locale 显示元数据与 host 自报版本，
  *    这正是制造 mismatch 的手段）。适合「改完 UI 立刻验证」。
  * ② commit 模式（commit a = 旧版本，commit b = 新版本）：两个版本各自从**指定 commit 的
  *    代码树**在临时 git worktree 里构建（工作区完全不参与、也不被改动；未提交改动不会
@@ -34,10 +34,20 @@
  *     + 停 Verdaccio；
  *   - 所有测试资产（verdaccio 配置 / htpasswd / 发布凭据 / tgz / 包数据 / 日志 / bump 状态 /
  *     临时 worktree）都集中在 git-ignored 的 .verdaccio-storage/——整删即净，仓库无残留。
+ *
+ * verdaccio 启动形态（2026-10-19 范式修复迁移，取证见 docs/pitfalls.md §13）：
+ *   - **不用** detached + shell：Windows 上 DETACHED_PROCESS 只让直接子进程拿到 stdio
+ *     句柄，孙进程（node）拿到的是无效句柄 → 输出被静默丢弃（日志恒为 0 字节）；
+ *   - 改 spawn(process.execPath, [bin, '--config', CONFIG_PATH]) + 两条管道 writeSync
+ *     落盘；bin 入口经包清单 bin 字段解析（包 exports 不放行 verdaccio/bin/verdaccio）；
+ *   - 挂 on('error')/on('exit')：启动失败 / 启动即退出**立即判死**并贴日志尾部，
+ *     不再白等满预算；探测循环逐次记录失败原因与耗时；启动前 assertRegistryPortFree()
+ *     预检 4873 占用。
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import {
+  closeSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -46,10 +56,11 @@ import {
   readdirSync,
   rmSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import readline from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
 
@@ -61,6 +72,8 @@ const HTPASSWD_PATH = join(STORAGE_DIR, 'htpasswd')
 const PUBLISH_NPMRC_PATH = join(STORAGE_DIR, 'publish.npmrc')
 const STATE_PATH = join(STORAGE_DIR, 'version-bump-state.json')
 const VERDACCIO_LOG_PATH = join(STORAGE_DIR, 'verdaccio.log')
+/** verdaccio 的数据目录（storage 的落盘位置；启动前显式创建，避免首次启动时自建失败）。 */
+const STORAGE_DATA_PATH = join(STORAGE_DIR, 'storage')
 const REGISTRY_SOURCE_RELATIVE_PATH = join('src', 'shared', 'registry-latest.ts')
 const REGISTRY_SOURCE_PATH = join(ROOT, REGISTRY_SOURCE_RELATIVE_PATH)
 const REGISTRY_URL = 'http://127.0.0.1:4873'
@@ -98,13 +111,13 @@ function verdaccioConfigFor(pkgName) {
     ? `  '${pkgName.split('/')[0]}/**':\n    access: $all\n    publish: $all\n    unpublish: $all\n`
     : ''
   return `# 由 scripts/test-version-bump.mjs 每次运行时生成（勿手改，测试后随文件夹一起删）。
-storage: ${JSON.stringify(join(STORAGE_DIR, 'storage'))}
+storage: ${JSON.stringify(STORAGE_DATA_PATH)}
 listen: 127.0.0.1:4873
 web:
   title: '${pkgName} 本地版本 bump 验证源'
 auth:
   htpasswd:
-    file: ${JSON.stringify(join(STORAGE_DIR, 'htpasswd'))}
+    file: ${JSON.stringify(HTPASSWD_PATH)}
     max_users: -1
 uplinks:
   npmjs:
@@ -117,10 +130,6 @@ ${scopeBlock}  '**':
 middlewares:
   audit:
     enabled: false
-log:
-  type: file
-  path: ${JSON.stringify(join(STORAGE_DIR, 'verdaccio-file.log'))}
-  level: http
 `
 }
 
@@ -528,12 +537,85 @@ async function mintPublishToken() {
   }
 }
 
+/** 子进程生命周期事实（startVerdaccio 挂监听、waitForRegistry 据此立即判死）。 */
+let verdaccioSpawnError
+let verdaccioExit
+
+/** 日志尾部若干行——故障时贴进错误信息。空日志 = 唯一的证据被扔了，故这里必须非空。 */
+function verdaccioLogTail(lines = 15) {
+  try {
+    const content = readFileSync(VERDACCIO_LOG_PATH, 'utf8').replace(/\r\n/g, '\n').trimEnd()
+    if (content === '') return '（日志为空）'
+    return content.split('\n').slice(-lines).join('\n')
+  } catch {
+    return '（日志不可读）'
+  }
+}
+
+/**
+ * verdaccio 的 bin 入口：不能直接 resolve('verdaccio/bin/verdaccio')（包的 exports
+ * 不放行该子路径），改读包清单的 bin 字段（实测 bin = './bin/verdaccio'）。
+ */
+function resolveVerdaccioBin() {
+  const require = createRequire(import.meta.url)
+  const manifestPath = require.resolve('verdaccio/package.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const binField = manifest.bin
+  const relative = typeof binField === 'string' ? binField : binField?.verdaccio
+  if (typeof relative !== 'string' || relative === '') {
+    fail(`verdaccio 包清单里没有可用的 bin 入口（${manifestPath}）——依赖被替换过？`)
+  }
+  return join(dirname(manifestPath), relative)
+}
+
+/** 轮询前的占用预检：4873 已有应答 = 残留实例或别的进程占着 → 立刻说清，不白等。 */
+async function assertRegistryPortFree() {
+  try {
+    await fetch(`${REGISTRY_URL}/`, { signal: AbortSignal.timeout(1_500) })
+  } catch {
+    return // 连不上 = 端口空闲（正常）
+  }
+  fail(`${REGISTRY_URL} 已经有进程在应答——先停掉它（或改端口）再重跑；本脚本不抢占已有 4873。`)
+}
+
 function startVerdaccio() {
+  mkdirSync(STORAGE_DATA_PATH, { recursive: true })
+  const binPath = resolveVerdaccioBin()
   const log = openSync(VERDACCIO_LOG_PATH, 'w')
-  // DEP0190 规避：单条命令串（CONFIG_PATH 无空格）。
-  const child = spawn(`verdaccio --config ${CONFIG_PATH}`, { cwd: ROOT, detached: true, stdio: ['ignore', log, log], shell: true })
-  child.unref()
-  info(`verdaccio 已后台启动（pid ${String(child.pid)}，日志 .verdaccio-storage/verdaccio.log）`)
+  let logClosed = false
+  /** 幂等关 fd：'error' 与 'exit' 可能都触发，重复 close 会抛 EBADF。 */
+  const closeQuietly = () => {
+    if (logClosed) return
+    logClosed = true
+    try { closeSync(log) } catch { /* 已关 */ }
+  }
+  verdaccioSpawnError = undefined
+  verdaccioExit = undefined
+  // 刻意**不用** detached + shell：Windows 上 DETACHED_PROCESS 只让直接子进程拿到
+  // stdio 句柄，孙进程（node）拿到的是无效句柄 → verdaccio 的输出被静默丢弃
+  // （实测：verdaccio 正常监听、/ 返回 200，日志仍恒为 0 字节；故障时等于把唯一
+  // 证据扔了）。改成直接 spawn node + bin，两条管道落盘（2026-10-19 范式修复迁移）。
+  const child = spawn(process.execPath, [binPath, '--config', CONFIG_PATH], {
+    cwd: ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  })
+  child.stdout.on('data', (chunk) => {
+    try { writeSync(log, chunk) } catch { /* 进程已退出、fd 已关：忽略 */ }
+  })
+  child.stderr.on('data', (chunk) => {
+    try { writeSync(log, chunk) } catch { /* 同上 */ }
+  })
+  // 生命周期监听：没有它，「启动即死」与「还在启动」在脚本眼里一模一样，只能白等。
+  child.on('error', (error) => {
+    verdaccioSpawnError = error
+    closeQuietly()
+  })
+  child.on('exit', (code, signal) => {
+    verdaccioExit = { code, signal }
+    closeQuietly()
+  })
+  info(`verdaccio 已启动（pid ${String(child.pid)}，入口 ${binPath}，日志 .verdaccio-storage/verdaccio.log）`)
   return child
 }
 
@@ -543,44 +625,44 @@ function stopVerdaccio(child) {
   info('verdaccio 已停止')
 }
 
-/** 4873 已有服务在监听（上次运行的 verdaccio 残留）时给出可执行的自救指引。 */
-async function preflightPortFree() {
-  try {
-    const response = await fetch(`${REGISTRY_URL}/`, { signal: AbortSignal.timeout(2_000) })
-    if (response.ok) {
-      fail(
-        `${REGISTRY_URL} 已有服务在监听——大概率是上次异常终止留下的 verdaccio 孤儿进程。`
-        + `清理：netstat -ano | findstr 4873 找到 PID，然后 taskkill /pid <PID> /T /F，再重跑本脚本。`,
-      )
-    }
-  } catch { /* 端口空闲（连接被拒/超时都是预期） */ }
-}
-
 /**
  * 轮询等待 verdaccio 就绪。**预算按时间计（60s）而非固定次数**——端口未监听时
- * fetch 瞬间失败（ECONNREFUSED），固定次数的实际预算只有 ~15s，冷启动
- * （当日首次拉起，Defender 扫描 + 依赖预热）实测会超（verdaccio 就绪曾落在
- * 第 3 次探测 ≈ 2s，也实测过 15s 预算直接放弃的误报）。verdaccio 的 stdout
- * 重定向到文件后被 taskkill /F 丢弃，日志可能恒为空——就绪判定只能靠端口探测，
- * 诊断信息靠进程退出检测 + log 配置落盘（见 VERDACCIO_CONFIG 的 log 段）。
+ * fetch 瞬间失败（ECONNREFUSED），固定次数的实际预算会被快失败缩水（历史上
+ * 「25 次 × 600ms」实际只有 ~15s，冷启动误报「30s 未就绪」）。
+ *
+ * 诊断三件套（2026-10-19 范式修复迁移）：
+ * ① 启动失败 / 启动即退出**立即判死**，不再白等满预算；
+ * ② 每次探测记录失败原因与耗时（非 2xx 也报状态码——提示 4873 可能被别的进程占用）；
+ * ③ 失败时贴出**日志尾部**——启动形态已改为管道落盘（见 startVerdaccio），日志必非空。
  */
-async function waitForRegistry(child) {
-  const budgetUntil = Date.now() + 60_000
-  let lastError = ''
+async function waitForRegistry() {
+  const startedAt = Date.now()
+  const budgetUntil = startedAt + 60_000
+  let lastReason = '（尚未探测）'
+  let attempt = 0
   while (Date.now() < budgetUntil) {
-    if (child.exitCode !== null && child.exitCode !== undefined) {
-      fail(`verdaccio 进程已提前退出（exit ${String(child.exitCode)}）——查看 .verdaccio-storage/verdaccio.log 与 .verdaccio-storage/verdaccio-file.log`)
+    attempt += 1
+    if (verdaccioSpawnError !== undefined) {
+      fail(`verdaccio 启动失败：${verdaccioSpawnError.message}`)
+    }
+    if (verdaccioExit !== undefined) {
+      const signal = verdaccioExit.signal === null ? '' : `，signal ${String(verdaccioExit.signal)}`
+      fail(`verdaccio 启动即退出（exit ${String(verdaccioExit.code)}${signal}）——日志尾部：\n${verdaccioLogTail()}`)
     }
     try {
       const response = await fetch(`${REGISTRY_URL}/`, { signal: AbortSignal.timeout(2_000) })
-      if (response.ok) { info('verdaccio 就绪'); return }
-      lastError = `HTTP ${String(response.status)}`
+      if (response.ok) {
+        info(`verdaccio 就绪（第 ${String(attempt)} 次探测，用时 ${((Date.now() - startedAt) / 1000).toFixed(1)}s）`)
+        return
+      }
+      lastReason = `HTTP ${String(response.status)}（端口有应答但非 2xx——4873 可能被别的进程占用？）`
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
+      lastReason = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     }
     await new Promise(resolve => setTimeout(resolve, 500))
   }
-  fail(`verdaccio 60s 内未就绪（最后一次探测：${lastError || '未知'}）——若反复出现，查看 .verdaccio-storage/verdaccio-file.log 与 verdaccio.log`)
+  const waited = ((Date.now() - startedAt) / 1000).toFixed(0)
+  fail(`verdaccio ${waited}s 内未就绪；最后一次探测：${lastReason}\n日志尾部：\n${verdaccioLogTail()}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -631,9 +713,9 @@ async function verifyLatest(pkgName, version) {
 /** 启动 Verdaccio → 发布 → 校验 /latest（两模式共用的一段）。 */
 async function publishAndVerify(pkgName, tarballPath, version, stepLabel) {
   info(`${stepLabel} 启动 Verdaccio 并发布 ${version}……`)
-  await preflightPortFree()
+  await assertRegistryPortFree()
   activeVerdaccioChild = startVerdaccio()
-  await waitForRegistry(activeVerdaccioChild)
+  await waitForRegistry()
   await mintPublishToken()
   publishTarball(pkgName, tarballPath)
   await verifyLatest(pkgName, version)
@@ -728,7 +810,7 @@ function planBumpMode() {
   const manifest = readManifest()
   const versionA = manifest.version
   const versionB = nextVersion(versionA)
-  info(`当前版本 ${versionA}；测试流程：Verdaccio 发布 ${versionA} → 你安装（新装插件，不用重启）→ bump 到 ${versionB} 构建并发布 → 卸载后安装新版本（不重启）验证 stale → 还原`)
+  info(`当前版本 ${versionA}；测试流程：Verdaccio 发布 ${versionA} → 你安装（新装插件，不用重启）→ bump 到 ${versionB} 构建并发布 → 卸载后安装新版本（不重启）验证免重启生效 → 还原`)
   return { mode: 'bump', pkgName: manifest.name, versionA, versionB }
 }
 
@@ -801,8 +883,8 @@ async function runBumpMode(rl, plan) {
   // 用户明确要求：安装完毕后结束当前 Verdaccio（下一阶段重新启动再发布）。
   stopVerdaccioForNextPhase()
 
-  // ---- Phase 2：bump + build + 发布新版本 → 用户安装（不重启）→ stale ----
-  info(`⑤ bump version ${versionA} → ${versionB}，并重新构建（client 烧录 BUILD_VERSION=${versionB}；dsh 内副本是 verdaccio 安装的复制品，不受 workspace 构建影响，无 client-hmr 干扰）……`)
+  // ---- Phase 2：bump + build + 发布新版本 → 用户安装（不重启）→ 验证免重启生效 ----
+  info(`⑤ bump version ${versionA} → ${versionB}，并重新构建（locale 显示元数据跟随新版本；dsh 内副本是 verdaccio 安装的复制品，不受 workspace 构建影响，无 client-hmr 干扰）……`)
   bumpVersion(versionB)
   recordBumpState(versionA, versionB)
   workspaceDirty = true
@@ -811,14 +893,15 @@ async function runBumpMode(rl, plan) {
 
   await publishAndVerify(pkgName, pack2.tarballPath, versionB, '⑥')
 
-  info(`⑦ 现在可去 dsh 测试 available：到「插件」页把本插件的启动/关闭开关点一次（该操作会跑一次检查更新）→ latest ${versionB} > running ${versionA} → available 更新弹窗（此刻 client 仍 ${versionA}、无 mismatch，陈旧对话框不触发，只有这一个弹窗）。`)
-  await rl.question('⑧ available 验证完成后按回车：先卸载本插件、再安装新版本以验证 stale（**不重启**）……')
+  info(`⑦ 现在可去 dsh 测试 available：到「插件」页把本插件的启动/关闭开关点一次（该操作会跑一次检查更新）→ latest ${versionB} > running ${versionA} → available 更新弹窗（此刻运行中的仍是 ${versionA}，只弹这一个弹窗）。`)
+  await rl.question('⑧ available 验证完成后按回车：先卸载本插件、再安装新版本以验证免重启生效（**不重启**）……')
 
   info(`⑨ 请到「插件」页本插件的详情页：先**卸载**本插件，再经自定义 npm 源**安装** ${pkgName}@${versionB} → **不重启 dsh** →`)
-  info(`   预期：danger 陈旧对话框弹出（running ${versionA} ≠ client BUILD_VERSION ${versionB}），`)
-  info('   且 available 更新弹窗被 stale 优先抑制（只弹陈旧一个）→ 两次提醒语义可验；')
-  info('   重启 dsh → 版本一致 → 对话框消失。')
-  await rl.question('⑩ stale 验证完成后按回车，脚本将自动还原（候选源回官方两源 + 版本号回滚 + 重建 + 停 Verdaccio）……')
+  info(`   预期（0.2.1 起 harness 会在重装时驱逐旧模块）：插件立刻以 ${versionB} 运行——`)
+  info(`   ① 详情页/更新条显示的当前版本 = ${versionB}，且**不弹任何"陈旧代码"对话框**（旧防护已拆除，见 docs/harness-defect-workarounds.md）；`)
+  info('   ② 面板与业务端点跑的是新版本代码（改了 UI/文案时肉眼可辨）；')
+  info(`   ③ 反证：若仍显示 ${versionA}，说明上游驱逐失效 → 记录并回报（旧防护已按回退清单拆除，不再用代码兜底）。`)
+  await rl.question('⑩ 免重启验证完成后按回车，脚本将自动还原（候选源回官方两源 + 版本号回滚 + 重建 + 停 Verdaccio）……')
 }
 
 async function runCommitMode(rl, plan) {
@@ -839,7 +922,7 @@ async function runCommitMode(rl, plan) {
   await rl.question('   安装完成后按回车，脚本将停止 Verdaccio 并进入版本 B 阶段……')
   stopVerdaccioForNextPhase()
 
-  // ---- Phase 2：commit b 的代码（必要时临时 bump 版本）→ 版本 B → 发布 → 不重启安装 → stale ----
+  // ---- Phase 2：commit b 的代码（必要时临时 bump 版本）→ 版本 B → 发布 → 不重启安装 → 验证免重启生效 ----
   info(`⑤ 构建版本 B${bumped ? `：b 与 a 的版本相同（${versionA}），在 b 的 worktree 里把版本临时 bump 到 ${versionB}（只改工作文件、不提交，随 worktree 一起丢弃）` : `（commit b 自带版本 ${versionB}）`}……`)
   const worktreeB = createWorktree(shaB, 'b')
   patchRegistrySource(true, worktreeB)
@@ -849,14 +932,15 @@ async function runCommitMode(rl, plan) {
 
   await publishAndVerify(pkgName, pack2.tarballPath, versionB, '⑥')
 
-  info(`⑦ 现在可去 dsh 测试 available：到「插件」页把本插件的启动/关闭开关点一次（该操作会跑一次检查更新）→ latest ${versionB} > running ${versionA} → available 更新弹窗（此刻 client 仍 ${versionA}、无 mismatch，陈旧对话框不触发，只有这一个弹窗）。`)
-  await rl.question('⑧ available 验证完成后按回车：先卸载本插件、再安装版本 B 以验证 stale（**不重启**）……')
+  info(`⑦ 现在可去 dsh 测试 available：到「插件」页把本插件的启动/关闭开关点一次（该操作会跑一次检查更新）→ latest ${versionB} > running ${versionA} → available 更新弹窗（此刻运行中的仍是 ${versionA}，只弹这一个弹窗）。`)
+  await rl.question('⑧ available 验证完成后按回车：先卸载本插件、再安装版本 B 以验证免重启生效（**不重启**）……')
 
   info(`⑨ 请到「插件」页本插件的详情页：先**卸载**本插件，再经自定义 npm 源**安装** ${pkgName}@${versionB} → **不重启 dsh** →`)
-  info(`   预期：danger 陈旧对话框弹出（running ${versionA} ≠ client BUILD_VERSION ${versionB}），`)
-  info('   且 available 更新弹窗被 stale 优先抑制（只弹陈旧一个）→ 两次提醒语义可验；')
-  info('   重启 dsh → 版本一致 → 对话框消失。')
-  await rl.question('⑩ stale 验证完成后按回车，脚本将自动还原（删除临时 worktree + 停 Verdaccio；工作区自始至终未被改动）……')
+  info(`   预期（0.2.1 起 harness 会在重装时驱逐旧模块）：插件立刻以 ${versionB} 运行——`)
+  info(`   ① 详情页/更新条显示的当前版本 = ${versionB}，且**不弹任何"陈旧代码"对话框**（旧防护已拆除，见 docs/harness-defect-workarounds.md）；`)
+  info('   ② 面板与业务端点跑的是新版本代码（改了 UI/文案时肉眼可辨）；')
+  info(`   ③ 反证：若仍显示 ${versionA}，说明上游驱逐失效 → 记录并回报（旧防护已按回退清单拆除，不再用代码兜底）。`)
+  await rl.question('⑩ 免重启验证完成后按回车，脚本将自动还原（删除临时 worktree + 停 Verdaccio；工作区自始至终未被改动）……')
 }
 
 // ---------------------------------------------------------------------------

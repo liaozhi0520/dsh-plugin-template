@@ -1,11 +1,10 @@
 /**
- * 构建期烧录脚本（build 链首步）：
+ * 构建期生成脚本（build 链首步）：
  *
- * ① 生成 src/client/build-version.ts（BUILD_VERSION = package.json 的 version）；
- * ② 生成 locale/{zh,en}.json 的**包显示元数据**（meta.title/meta.description）。
- *    「插件」页卡片在不激活插件的前提下静态读取安装包内的这两个文件（官方
- *    host-plugin.md「Display metadata and icon」），故卡片文案不能走运行时
- *    locale 词典，须以包内静态 JSON 发布。
+ * 生成 locale/{zh,en}.json 的**包显示元数据**（meta.title/meta.description）。
+ * 「插件」页卡片在不激活插件的前提下静态读取安装包内的这两个文件（官方
+ * host-plugin.md「Display metadata and icon」），故卡片文案不能走运行时
+ * locale 词典，须以包内静态 JSON 发布。
  *
  * 单一事实源（构建期正则提取；提取失败 = build 显式报错，不静默产出空值）：
  * - title ← src/client/locales.ts 的 `title: '…'`（zh/en 两本词典各一处，须同值）；
@@ -14,9 +13,13 @@
  * - description 基底文案 = 本脚本常量（改文案改这里）。
  *
  * 由 `pnpm run build` 显式链式调用（不依赖 npm pre/post 钩子语义，pnpm 对
- * enable-pre-post-scripts 的默认值不可靠）：各产物内容与磁盘现状一致时不写盘，
- * 避免重复构建时空转。smoke-offline 守护 build-version 三处一致（0d）与
- * locale 元数据一致性（0g）。
+ * enable-pre-post-scripts 的默认值不可靠）：产物内容与磁盘现状一致时不写盘，
+ * 避免重复构建时空转。smoke-offline 0g 守护 locale 元数据一致性。
+ *
+ * 【0.2.1 起】原先还在这里烧录 `src/client/build-version.ts` 的 BUILD_VERSION
+ * （陈旧代码检测的 client 半基准）。该检测已随上游修复整体拆除（卸载重装不重启
+ * 由 harness 自行驱逐旧模块，2026-10-19 真机确认），本步骤一并删除——不要再
+ * 加回来，取证见 docs/harness-defect-workarounds.md 的历史防护回退块。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
@@ -25,34 +28,6 @@ if (typeof pkg.version !== 'string' || pkg.version === '') {
   console.error('[gen-version] package.json 缺少 version')
   process.exit(1)
 }
-
-// ---------------------------------------------------------------------------
-// ① BUILD_VERSION（陈旧代码防护的 client 半基准）
-// ---------------------------------------------------------------------------
-
-const buildVersionContent = `/**
- * 构建期烧录的插件版本——由 scripts/gen-version.mjs 生成（build 链自动重生成，勿手改）。
- *
- * 陈旧代码检测的 client 半基准：StaleBanner 把 getUpdateState 快照的
- * currentVersion（运行中 host 模块自报版本，package-info.ts 模块求值期缓存）
- * 与本常量做**严格不等**比较——不一致 = 进程内跑的不是磁盘上这份代码（卸载
- * 重装未重启，Node ESM 模块缓存缺陷），弹出陈旧提醒对话框要求重启 DeepSeek
- * Harness。改动本文件请改 gen-version.mjs 的模板。
- */
-export const BUILD_VERSION = ${JSON.stringify(pkg.version)}
-`
-
-const buildVersionTarget = new URL('../src/client/build-version.ts', import.meta.url)
-if (existsSync(buildVersionTarget) && readFileSync(buildVersionTarget, 'utf8') === buildVersionContent) {
-  // 已一致，不写盘
-} else {
-  writeFileSync(buildVersionTarget, buildVersionContent)
-  console.log(`[gen-version] BUILD_VERSION = ${pkg.version} 已写入 src/client/build-version.ts`)
-}
-
-// ---------------------------------------------------------------------------
-// ② locale/{zh,en}.json 显示元数据（插件页卡片 title/description）
-// ---------------------------------------------------------------------------
 
 /** 卡片描述基底文案（改文案改这里；兼容窗口由 version-gate.ts 构建期注入）。 */
 const BASE_DESCRIPTION = {
