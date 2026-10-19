@@ -32,7 +32,9 @@
 - shell.overlay 条目 id：<语义前缀>-update-notice（陈旧提醒条目已随 0.2.1 拆除）
 - gen-version BASE_DESCRIPTION：zh/en 各一句
 - spec.ts 默认值（greeting/punctuation）+ cordis.patch.yml config 注释示例
-- icon.svg / LICENSE / package.json description / README、AGENTS、docs 旧身份全量替换
+- LICENSE / package.json description / README、AGENTS、docs 旧身份全量替换
+- **icon.svg 不要改**（默认沿用模板占位图；用户明确要求换图标时才动，并在报告里
+  单列「表外改动」）
 
 ## 操作流程约束
 按 docs/derivation-guide.md §3 执行；验证按 §4 三连；纪律按 §5。
@@ -99,9 +101,14 @@
 | `scripts/gen-version.mjs` 的 `BASE_DESCRIPTION`（zh/en） | 卡片描述基底文案（兼容窗口 `[MIN,MAX]` 构建期自动注入，不用写版本） |
 | `src/spec.ts` 的 greeting/punctuation 默认值 + `cordis.patch.yml` 顶部 config 注释示例 | demo 默认值（两处同步） |
 | `package.json` 的 `description` | 插件一句话描述 |
-| `icon.svg` | 插件图标（「插件」页卡片静态读取；可沿用模板占位图后换） |
 | `LICENSE` 版权行 | 你的名字 |
 | README / AGENTS / docs / 示例文案里的旧短 id | 全量替换 |
+
+> **`icon.svg` 不在改名清单里（默认不动）**：「插件」页卡片虽静态读取它，但它是
+> **视觉资产而非身份串**——沿用模板占位图不影响任何功能、构建或加载，卡片照常
+> 显示。衍生时**不要顺手换图**（实测：一次衍生里 agent 自作主张重画了图标，用户
+> 只要求改名，属于范围外改动，复核时还得回退）。只有用户明确要求换图标时才改，
+> 并在报告里把它单列为「表外改动」。
 
 ### 表⑤ RPC namespace/service 与端点串 —— **两端必须一致，漏改不报错（最危险的缺口）**
 
@@ -155,11 +162,16 @@
     `.d.ts` 引用了未声明的包（0.2.1 实测 `dsh-api-remotes` / `dsh-client-store`
     / `dsh-attachment`）——**不要补 devDep、不要关 `skipLibCheck`**，那是上游
     惯例（见 `docs/pitfalls.md` §7b）。
+11. **别自作主张换 `icon.svg`**：图标是视觉资产不是身份串，沿用模板占位图不影响
+    卡片显示、构建与加载。衍生任务只要求改名时**不要重画图标**——实测踩过一次
+    （agent 重画了放大镜图标），属于范围外改动，用户复核后要求回退。要换图标
+    必须由用户明确要求，且报告里单列「表外改动」。
 
 ## 6. 完成定义（DoD）
 
 - [ ] 三连全绿：`pnpm typecheck` / `pnpm build` / `pnpm run smoke-offline`（31 项 ALL PASSED）
 - [ ] `git grep` 分类核对：身份引用零残留（§4 第 5 行的两类清单）
+- [ ] `icon.svg` 未改动（用户未明确要求换图时；§5 坑 11）
 - [ ] `git init` + 初始 commit（0.2.1 起无提交期闸门）
 - [ ] （可选）`pnpm version patch --no-git-tag-version` 冒烟 → `pnpm build` 后 smoke 0g 过 → 还原重建
 - [ ] 人工待验项已告知：桌面真机安装、配置页/ping/greet、版本提示弹窗（test-version-bump）
