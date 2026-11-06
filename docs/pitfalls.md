@@ -3,6 +3,13 @@
 > AGENTS.md「已踩过的坑」一节是本文件的一句话索引；本文件保留叙述与取证。
 > 范式来源：dsh-comfyui-based-tools `docs/pitfalls.md` 的通用子集（ComfyUI
 > 部署/工作流专属坑未收录）。
+>
+> ⚠️ **【0.2.2 起方案 A】本文涉及「版本提示 / registry 候选源 / shell.overlay
+> 更新条目 / 自更新 / 陈旧检测」的条目（§4、§5、§12–14 等）所对应的代码已
+> 整体删除，仅作历史取证保留，勿照其恢复**。其中「宿主 fetch 压缩体」的防御工具
+> `src/shared/json-body.ts` 仍保留（当前无调用方、也不产出 lib 文件），将来 host
+> 侧重新发起网络 JSON 请求时纪律仍适用。现行事实见 `AGENTS.md` 与
+> `docs/compat-plan-0.2.2-rc.1.md`。
 
 ## 1. client 槽位「未声明即静默不触发」
 

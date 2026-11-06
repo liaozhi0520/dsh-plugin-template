@@ -1,17 +1,18 @@
 # <插件名> × DSH <目标版本> 兼容计划（剧本模板）
 
 > **用法**：`cp docs/compat-plan-TEMPLATE.md docs/compat-plan-<目标版本>.md` 后逐节填写。
-> 差异事实从**上一轮的执行记录**取（现为 `docs/compat-plan-0.2.1-rc.2.md`；
+> 差异事实从**上一轮的执行记录**取（现为 `docs/compat-plan-0.2.2-rc.1.md`；
 > 更早的差异手册 `docs/compat-guide-0.1.2-to-0.1.5.md` 已归档，仅作方法论参考）。
 > 若目标版本更新，先按上一轮记录 §8 的取证方法（只读 `git show/diff/ls-tree/grep <tag>`）
 > 对新区间重新取证，再动手；本文档只组织 **执行流程**。迁移完成后本文档保留为执行记录。
 >
-> **窗口前提（默认双边界，同线内可含多个 rc）**：本模板与其派生插件的窗口是
-> `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`，peer/dev 写同一个
+> **窗口前提（默认单点，跨线迁移只钉一个已实测 tag）**：本模板与其派生插件的
+> 窗口是 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`，peer/dev 写同一个
 > `^<已实测的最低版本>`，门禁用双边界比较，代码里**不留版本探测分支**。
-> 同 tuple 内追新（如 rc.1 → rc.2 → rc.3）caret 已覆盖，**只抬 MAX、不动依赖**；
-> **tuple 变化**（0.2.0→0.2.1）或跨 minor 线才需要手改依赖并重跑破坏面取证。当前窗口为
-> `[0.2.1-rc.1, 0.2.1-rc.2]`。如确需多线支持，参考
+> **0.2.2-rc.1 起为单点窗口 `[0.2.2-rc.1, 0.2.2-rc.1]`（MIN = MAX）**：跨
+> minor 线迁移时 MIN/MAX 同轮上移；同 tuple 内追新（如 0.2.2-rc.1 → rc.2）
+> caret 已覆盖，**只抬 MAX、不动依赖**；**tuple 变化**（0.2.1→0.2.2）或跨
+> minor 线才需要手改依赖并重跑破坏面取证。如确需多线支持，参考
 > `docs/compat-guide-0.1.1-to-0.1.2.md`（历史手册）的双线方法，并在
 > `AGENTS.md` 与本计划里明确标注为多线。
 
@@ -35,7 +36,7 @@
 ## 1. 调研总结论
 
 > 逐项列「新线变化 → 对本插件的实际影响」，并把每项归到
-> **运行时破坏 / 类型层破坏 / normal** 三类（分类标准见 `docs/compat-plan-0.2.1-rc.2.md` §2）。
+> **运行时破坏 / 类型层破坏 / normal** 三类（分类标准见 `docs/compat-plan-0.2.2-rc.1.md` §2）。
 > 结论示例：破坏集中在哪些层，运行时分叉几处。
 
 | 新线变化 | 对本插件的实际影响 | 分级 |
@@ -53,7 +54,7 @@
 - **peer 与 dev 同值**：全部 `@deepseek-ai/dsh-*` 收敛为 `^<目标版本>`
   （窗口内没有"下限/上限/并集"之分）；
 - `dsh.client.inject` / tsdown `neverBundle`：对齐目标版本的包集
-  （当前基线见 `packages/client/web/src/platform.ts` 的 `PLATFORM_MODULES`，0.2.1-rc.2 实装）。
+  （当前基线见 `packages/client/web/src/platform.ts` 的 `PLATFORM_MODULES`，0.2.2-rc.1 实装）。
 
 ### 2.2 源码迁移
 
@@ -89,10 +90,11 @@
 ## 3. 版本窗口决策
 
 MIN = ?（保持已实测的最低版本）；MAX = ?（**已实测验证**的 tag；冒烟通过前不得抬）。
-窗口保持双边界：MIN 保持已实测的最低版本，需要支持新版本时只上调 MAX——
-同 tuple 内的新 rc（如 rc.1 → rc.2）caret 已覆盖，**不动依赖**；tuple 变化
-（如 0.2.0→0.2.1）或跨 minor 线才需手改依赖并重跑破坏面取证。不要随意加宽到
-未实测的 tag（跨版本 API 破坏频繁，范围放宽救不了）。
+窗口当前为单点 `[0.2.2-rc.1, 0.2.2-rc.1]`（MIN = MAX）；需要支持同 tuple 新版本
+时只上调 MAX——同 tuple 内的新 rc（如 0.2.2-rc.1 → rc.2）caret 已覆盖，**不动
+依赖**；tuple 变化（如 0.2.1→0.2.2）或跨 minor 线才需 MIN/MAX 同轮上移、手改
+依赖并重跑破坏面取证。不要随意加宽到未实测的 tag（跨版本 API 破坏频繁，范围
+放宽救不了）。
 
 ## 4. 可选项（P2，顺手项）
 
@@ -122,7 +124,7 @@ MIN = ?（保持已实测的最低版本）；MAX = ?（**已实测验证**的 t
 
 ## 8. 证据索引
 
-- 取证 tag 与命令（`git show/diff/ls-tree/grep <tag>` 只读对照，见 `docs/compat-plan-0.2.1-rc.2.md` §8）；
+- 取证 tag 与命令（`git show/diff/ls-tree/grep <tag>` 只读对照，见 `docs/compat-plan-0.2.2-rc.1.md` §8）；
 - 关键源码位置（文件:行）；
 - 新线拆分/变更的提交链；
 - 调研方法（只读对照，两份独立调研交叉验证）。

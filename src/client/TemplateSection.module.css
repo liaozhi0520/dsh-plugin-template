@@ -1,9 +1,8 @@
-/* 模板配置页样式（类名经 CSS Modules 哈希，防全局污染）。
-   布局：标题行（左：标题；右：插件更新条）→ 更新提示条（available 时）→
-   intro → 配置编辑卡 → ping 演示行，与 dsh-comfyui-based-tools 的
-   ComfySection 同构。
+/* 模板配置页 / 停用说明面板样式（类名经 CSS Modules 哈希，防全局污染）。
+   布局：标题 → intro → 配置编辑卡（0.1.7 settings 模型示范面）→ ping 演示行。
    颜色一律走 harness 设计令牌（--dsw-alias-*，由 ui-theme 按主题写到 :root），
-   明暗主题自动跟随；禁止字面颜色。 */
+   明暗主题自动跟随；禁止字面颜色。
+   【0.2.2 起】方案 A 删除了更新条 / 提示条 / 安装命令药丸，对应样式一并清理。 */
 
 /* 挂在「插件」页组合包详情页的配置区块里（流式布局，页面自身滚动）：
    面板整体做成边框可见的卡片容器（最小宽度给足存在感）。 */
@@ -29,84 +28,11 @@
   border-radius: 12px;
 }
 
-.headerRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex: none;
-}
-
 .title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
-}
-
-.updateBar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-/* 升级提示条（available 相位独占一行）：指引句 + 命令框行纵向排列，
-   边框卡片形态与面板其他区块一致；命令框行随内容自适应（不铺满整行）。 */
-.updateNotice {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-}
-
-.updateNoticeText {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.updateVersion {
-  font-size: 12px;
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.updateStatus {
-  font-size: 12px;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.updateStatusOk {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.updateStatusError {
-  color: var(--dsw-alias-state-error-primary);
-  cursor: help;
-}
-
-.updateDetail {
-  font-size: 12px;
-  line-height: 1.5;
-  border-radius: 6px;
-  padding: 8px 10px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 160px;
-  overflow-y: auto;
-  user-select: text;
-  flex: none;
-}
-
-.updateDetailError {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-  color: var(--dsw-alias-state-error-primary);
 }
 
 .intro {
@@ -116,38 +42,12 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* 停用面板两条处置路径之间的分隔线（harness 组 / 插件组）。 */
-.groupDivider {
-  width: 100%;
-  height: 0;
-  margin: 2px 0;
-  border: none;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+/* 「已保存」反馈（配置写回成功）。 */
+.savedOk {
+  color: var(--dsw-alias-state-success-primary);
 }
 
-/* 命令药丸：边框方框只包等宽文本；复制按钮在方框外（.commandRow 行内并列）。
-   刻意不依赖官方组件（彼时官方包未必可用——停用面板渲染于 harness 版本
-   不兼容时），token 与 .button 同族。 */
-.commandRow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-
-.commandPill {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary);
-  word-break: break-all;
-  padding: 5px 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: transparent;
-}
-
-/* 配置编辑卡：边框容器（与更新提示条同族），内部表单纵排。 */
+/* 配置编辑卡：边框容器，内部表单纵排。 */
 .configCard {
   flex: none;
   display: flex;
@@ -202,27 +102,6 @@
 .formError {
   font-size: 12px;
   color: var(--dsw-alias-state-error-primary);
-}
-
-/* 通用小按钮——停用面板的复制按钮与更新条使用：停用面板渲染于 harness
-   版本不兼容时，刻意不依赖官方组件（彼时官方包未必可用）。 */
-.button {
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: transparent;
-  border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--dsw-alias-label-primary);
-}
-
-.button:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .row {

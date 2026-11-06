@@ -8,6 +8,9 @@
 > `src/client/StaleBanner.tsx`、`src/client/build-version.ts`、
 > `scripts/check-version-sync.mjs`、`.githooks/pre-commit`），验证从四连改为三连；
 > 原「34 文件差异」口径待下一次衍生 E2E 复测确认（估算 29）。
+> **【0.2.2 起方案 A】更新提醒链路再删 8 个文件、新增 `assets/detail/` /
+> `scripts/templates/detail.*.md` / `pnpm-workspace.yaml` 三个落点，文件差异计数
+> 再次变化——§2 的「约 29 个文件」口径需下一次衍生 E2E 复测后回填，勿直接沿用。**
 
 ## 0. 任务简报模板（派工时给 agent 的输入）
 
@@ -29,8 +32,10 @@
 - locales.ts title：<插件名>（zh/en 必须同值）
 - panelTitle：en = Setting Panel of <插件名>；zh = <插件名> 设置面板
 - TEMPLATE_NS：<语义>.panel；RPC 服务名：<语义>（端点串 <语义>/<method>）
-- shell.overlay 条目 id：<语义前缀>-update-notice（陈旧提醒条目已随 0.2.1 拆除）
-- gen-version BASE_DESCRIPTION：zh/en 各一句
+- shell.overlay 条目 id：**【0.2.2 起随更新提醒退役（方案 A），模板已无此落点】**
+  历史实现见 `git show 12d9b8f:src/client/GlobalNotice.tsx`（陈旧提醒条目已随
+  0.2.1 拆除）
+- gen-version `DESCRIPTION`：zh/en 各一句（description 必须非空、带 `{{compat}}` 占位符）
 - spec.ts 默认值（greeting/punctuation）+ cordis.patch.yml config 注释示例
 - LICENSE / package.json description / README、AGENTS、docs 旧身份全量替换
 - **icon.svg 不要改**（默认沿用模板占位图；用户明确要求换图标时才动，并在报告里
@@ -79,8 +84,8 @@
 | `src/spec.ts` 的 `SETTINGS_NS`（= settings.replace 的 ns，profile 组合条目 id） | `<短id>` |
 | `src/client/index.ts` 的 `export const name` + effect label（`: dictionaries`） | `<短id>` |
 | `tsdown.config.ts` 的 CSS 虚拟模块前缀（`\0dsh-plugin-template-css-module:`）与插件名（`dsh-plugin-template-css-modules-inline`） | `<短id>` |
-| shell.overlay 条目 id（`template-update-notice`） | `<语义前缀>-update-notice`（语义前缀 = 插件语义缩写如 `demo`；id 只需在宿主内唯一，不必等于短 id） |
-| 日志/错误前缀 `[dsh-plugin-template]` / `dsh-plugin-template: `：main.ts×3、soft-disable.ts×2、update-state.ts×3、package-info.ts×1、profile-gate.ts×2、client/index.ts×2、TemplateDisabledSection.tsx×1、根 index.ts×1；version-gate.ts 4 条错误文案前缀 | `<短id>` |
+| ~~shell.overlay 条目 id（`template-update-notice`）~~ | **【0.2.2 起随更新提醒退役（方案 A）】模板已无 shell.overlay 注册**；若派生插件确需该槽位，自行按 `<语义前缀>-notice` 命名、在 client/index.ts 注册，并保留 `dsh-client-ui-layout` peer |
+| 日志/错误前缀 `[dsh-plugin-template]` / `dsh-plugin-template: `：main.ts、soft-disable.ts、profile-gate.ts、client/index.ts、TemplateDisabledSection.tsx、根 index.ts；version-gate.ts 4 条错误文案前缀 | `<短id>` |
 | README / AGENTS / docs / 各文件头注释里的旧短 id | 全量替换 |
 
 ### 表③ 环境前缀 —— 2 处 + 文档
@@ -98,7 +103,7 @@
 | `src/client/locales.ts` 的 `title` | 插件名——**zh/en 必须同值**：gen-version 构建期提取为卡片显示名，不一致 build 显式报错（实测守护有效，首跑即拦） |
 | `src/client/locales.ts` 的 `panelTitle` | en = `Setting Panel of <插件名>`；zh = `<插件名> 设置面板`（详情页设置面板标题，与卡片显示名解耦） |
 | `src/client/locales.ts` 的 `TEMPLATE_NS` | locale 命名空间——**共 6 处同源**：locales.ts 本体、client/index.ts 的 LocaleNamespaceMap 声明、4 个组件的 `PropsLocale<'…'>` 类型参数（typecheck 拦漏改，非静默，但别靠它兜底） |
-| `scripts/gen-version.mjs` 的 `BASE_DESCRIPTION`（zh/en） | 卡片描述基底文案（兼容窗口 `[MIN,MAX]` 构建期自动注入，不用写版本） |
+| `scripts/gen-version.mjs` 的 `DESCRIPTION`（zh/en） | 卡片描述文案（必须非空、含 `{{compat}}` 占位符；兼容窗口构建期自动注入，不用写版本） |
 | `src/spec.ts` 的 greeting/punctuation 默认值 + `cordis.patch.yml` 顶部 config 注释示例 | demo 默认值（两处同步） |
 | `package.json` 的 `description` | 插件一句话描述 |
 | `LICENSE` 版权行 | 你的名字 |
@@ -119,8 +124,8 @@
 | `src/remote.ts`：`DESCRIPTORS` 的 `service` / `namespace`、`id` 前缀（`<短id>#<服务>/<method>`）、`TemplateRemote.typertRemote` 的 `serviceKey` / `namespace` | `<服务名>`（id 前缀用短 id） |
 | `src/main.ts` 的 `ctx.provide('<服务>', new TemplateRemote(…))` | `<服务名>` |
 | `src/shared/contract.ts` 的 `TEMPLATE_ENDPOINT`（ping/getConfig/saveConfig 三个端点串） | `<服务名>/<method>` |
-| `src/shared/update-contract.ts` 的 `UPDATE_ENDPOINT`（checkUpdate/getUpdateState 两个端点串） | `<服务名>/<method>` |
-| 各文件头注释与 README/AGENTS 里的端点名散文（`template/ping`、`template/getUpdateState` 等） | 同步更正 |
+| ~~`src/shared/update-contract.ts` 的 `UPDATE_ENDPOINT`~~ | **【0.2.2 起随更新提醒退役（方案 A）】文件已删**；模板 RPC 面只剩 `shared/contract.ts` 一条链 |
+| 各文件头注释与 README/AGENTS 里的端点名散文（`template/ping`、`template/getConfig` 等） | 同步更正 |
 
 一致性判据：client 侧调用全部走 shared 契约常量（不硬编码端点），host 侧描述符表与契约常量同源——改完 `git grep "'<旧服务>/"`（含引号）应为 0。
 
@@ -140,7 +145,7 @@
 |---|---|
 | `pnpm typecheck` | 语法/类型损坏（实测曾当场拦下批量替换事故造成的 4 文件字符级损坏）；locale ns 漏改（PropsLocale 参数不匹配） |
 | `pnpm build` | gen-version 的 title 提取失败（locales.ts zh/en title 不同值 → 显式报错）；tsc 编译错误 |
-| `pnpm run smoke-offline`（31 项） | 入口隔离与入口图白名单（往薄 shim 加 import）；**BUNDLE_KEY/banner id ≠ 包名**（0c）；**cordis.patch.yml id ↔ 构建产物 entry name** 交叉校验（rename 节）；locale 元数据 title 同源与窗口注入（0g）；桌面单锚语义（6a）；package-info 求值期缓存与状态机（6f）；退役契约 updateSelf 零残留（7） |
+| `pnpm run smoke-offline`（39 项） | 入口隔离与入口图白名单（往薄 shim 加 import）；**BUNDLE_KEY/banner id ≠ 包名**（0c）；**cordis.patch.yml id ↔ 构建产物 entry name** 交叉校验（rename 节）；locale 元数据 title 同源 / description 携带窗口 / **meta.detail 声明且文件存在**（0g）；桌面单锚语义（6a）；**无更新状态机产物**（6f）；**无更新提示契约 + 产物零出网 + json-body 保留**（7） |
 | `git grep` 残留核对 | **分两类**：身份引用（RPC 端点串 `<旧服务>/`、`SETTINGS_NS`、locale ns、overlay id、旧 scope、旧前缀）必须零残留；描述性提及可保留（BASE_DESCRIPTION、README「从模板衍生」说明、docs 存档） |
 
 ## 5. 实测坑清单（衍生 E2E 观察到的，按危险度排序）
@@ -169,7 +174,7 @@
 
 ## 6. 完成定义（DoD）
 
-- [ ] 三连全绿：`pnpm typecheck` / `pnpm build` / `pnpm run smoke-offline`（31 项 ALL PASSED）
+- [ ] 三连全绿：`pnpm typecheck` / `pnpm build` / `pnpm run smoke-offline`（39 项 ALL PASSED）
 - [ ] `git grep` 分类核对：身份引用零残留（§4 第 5 行的两类清单）
 - [ ] `icon.svg` 未改动（用户未明确要求换图时；§5 坑 11）
 - [ ] `git init` + 初始 commit（0.2.1 起无提交期闸门）

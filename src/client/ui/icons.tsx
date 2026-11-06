@@ -1,6 +1,6 @@
 /**
  * 插件内联图标：复制自 harness ui-primitives（c:/deepseek-harness/packages/client/ui-primitives/src/icons/index.tsx，
- * @ dsh-v0.2.1-rc.2）。仅收录本插件用到的 4 个 Regular 描边图标；
+ * @ dsh-v0.2.1-rc.2（0.2.2-rc.1 已复核，代码未同步））。仅收录本插件用到的 4 个 Regular 描边图标；
  * strokeWidth 固定 1（上游 ICON_REGULAR_STROKE），color 走 currentColor。
  * 上游演进追新时按文件名+图标名复核。官方规则：颜色只经 currentColor/token。
  */

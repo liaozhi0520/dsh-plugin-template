@@ -2,8 +2,8 @@
  * host 与 client 共享的插件业务 RPC 契约（纯数据 / 类型 / 常量）。
  * 浏览器端经 `ctx.connection.rpc.call('/api', <endpoint>, { args })` 调用
  * host 半 `template` 服务（描述符见 src/remote.ts 的 DESCRIPTORS 表）。
- * 与 update-contract.ts（版本提示）分文件：版本提示契约的占位语义有专门的
- * 两处同步纪律，业务契约没有——分开放避免误伤。
+ * 【0.2.2 起】原 update-contract.ts（版本提示契约）已随方案 A 删除，本文件
+ * 成为唯一的业务 RPC 契约；不再有任何 registry / 更新状态面的端点。
  */
 
 /** 业务 RPC 端点（`<namespace>/<method>`；namespace 与 Typert 服务同源）。 */

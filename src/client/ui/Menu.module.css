@@ -1,4 +1,4 @@
-/* 按用例裁剪复制自 harness ui-primitives（src/Menu.module.css @ dsh-v0.2.1-rc.2）：
+/* 按用例裁剪复制自 harness ui-primitives（src/Menu.module.css @ dsh-v0.2.1-rc.2（0.2.2-rc.1 已复核，代码未同步））：
  * 保留裁剪版 Menu（ui/Menu.tsx）实际产出的类；删 submenu/shortcut/dense/compact/
  * selectedFill/footer 相关规则。局部类名保留上游原名（隔离靠 CSS Modules 哈希）。 */
 

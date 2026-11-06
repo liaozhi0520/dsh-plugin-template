@@ -5,7 +5,7 @@
  * 故硬编码字符串，由 scripts/smoke-offline.mjs 的 0c 节守护：断言本常量与包
  * 清单一致。
  *
- * 独立成模块：client/index.ts（槽位注册）与升级提示（GlobalNotice / 面板更新
- * 条的「插件包名@最新版本」安装 spec 命令片）共用同一来源，避免第二处硬编码。
+ * 独立成模块：client/index.ts 的正常/停用两条 plugins.bundle.config 注册路径
+ * 共用同一来源，避免第二处硬编码（0.2.2 起更新提示命令片已随方案 A 删除）。
  */
 export const BUNDLE_KEY = '@scoped/dsh-plugin-template'

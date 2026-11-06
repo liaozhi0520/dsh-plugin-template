@@ -13,12 +13,15 @@
  * - settings：0.1.7 settings 模型——Config schema（./spec.ts，全字段 volatile）
  *   由 Loader 求值后经 apply(ctx, config) 注入，配置页经 TemplateSettingsHandle
  *   读写（写回走 ctx.settings.replace，ns = 条目 id）；
- * - 后端服务：TemplateRemote（ping 演示 + 配置读写 + 版本提示端点），实现见
- *   ./remote.ts，端点声明见 ./remote.ts 的 DESCRIPTORS；
- * - 插件版本提示：registry latest 检查（状态机见 ./update-state.ts）+ 运行中
- *   模块自报版本（./package-info.ts，即「当前版本」的诚实口径）。0.8.0 起
- *   无安装动作——发现新版本仅提示用户卸载后重装（0.2.1 起该闭环免重启：
- *   harness 在卸载/重装时自行驱逐旧模块）。
+ * - 后端服务：TemplateRemote（ping 演示 + 配置读写），实现见 ./remote.ts，
+ *   端点声明见 ./remote.ts 的 DESCRIPTORS；
+ * - 工具：greet（settings 读取示范）。
+ *
+ * 【0.2.2 起】插件不做任何版本更新提醒、不联网查 registry：版本检查与更新
+ * 由官方插件页（plugin-manager 的 Versions 区）接管。原 update-state /
+ * registry-latest / checkUpdate / getUpdateState 链路已整体删除（方案 A），
+ * 见 docs/compat-plan-0.2.2-rc.1.md。保留 src/shared/json-body.ts 作为宿主
+ * fetch 压缩体缺陷的防御工具（当前无调用方，缺陷① 在 rc.1 仍未修）。
  *
  * 浏览器经 `ctx.connection.rpc.call('/api', 'template/<method>')` 调用，
  * 由 Typert Gateway 按描述符分发到服务实例。
@@ -43,12 +46,10 @@ import type {} from '@deepseek-ai/dsh-settings'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DESCRIPTORS, TemplateRemote } from './remote.js'
 import { SETTINGS_NS, type TemplateConfig, type TemplateSettings, type TemplateSettingsHandle } from './spec.js'
-import { startUpdateCheck } from './update-state.js'
 
 /**
  * 业务主体装配。profile 门禁已由入口（index.ts）判定通过，profileDir 为其
- * 返回的 profile.dir（版本提示不需要 profile 锚点，参数保留以维持入口调用
- * 形态稳定）。
+ * 返回的 profile.dir（参数保留以维持入口调用形态稳定）。
  */
 export function apply(ctx: Context, config: TemplateConfig, _profileDir: string): void {
   // 0.1.7 设置句柄：读 = volatile 引用即时取值（浅拷贝剥离 deep-readonly 壳）；
@@ -98,11 +99,6 @@ export function apply(ctx: Context, config: TemplateConfig, _profileDir: string)
     model: { services: [], events: [], objects: [] },
     invocations: DESCRIPTORS,
   })
-
-  // 启动更新检查（fire-and-forget，见 ./update-state.ts）：状态机结论经
-  // template/getUpdateState 端点供前端面板/全局提示轮询；检查失败不影响本
-  // 函数与启动。
-  startUpdateCheck(false)
 
   console.log(`[dsh-plugin-template] host half loaded, greeting = ${JSON.stringify(settings.get().greeting)}`)
 }

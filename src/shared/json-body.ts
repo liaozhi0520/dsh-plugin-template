@@ -29,7 +29,11 @@
  * **可恢复面**：只有带魔数的 gzip（`1f8b`）与 zlib-deflate（`78xx`）能自解压；
  * brotli 无魔数、zstd 在 Node 24/26 的 DecompressionStream 里不被支持——这两种
  * 只做识别/报错，**不可恢复**。所以调用方更该做的是**从源头要明文**：
- * 显式发 `accept-encoding: identity`（见 registry-latest.ts / comfy-client.ts）。
+ * 显式发 `accept-encoding: identity`（原 registry-latest.ts 的做法）。
+ *
+ * 【0.2.2 起】方案 A 删除了全部 registry 轮询，本模块**当前无调用方**，但宿主
+ * fetch 压缩体缺陷在 rc.1 仍未修（undici 仍固定 8.11.2），故保留为防御工具：
+ * 将来 host 侧要读任何网络 JSON，仍必须走 readJsonBody + identity 请求头。
  *
  * 同构约束：只用双端全局 API（`Response` / `DecompressionStream` / `Blob` /
  * `TextDecoder`），**不得引入任何 Node 依赖**——本目录会被内联进 client bundle。

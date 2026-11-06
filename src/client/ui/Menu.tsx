@@ -1,6 +1,6 @@
 /**
  * Menu：harness ui-primitives Menu 的**按用例裁剪复制件**。
- * 来源：c:/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx @ dsh-v0.2.1-rc.2。
+ * 来源：c:/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx @ dsh-v0.2.1-rc.2（0.2.2-rc.1 已复核，代码未同步）。
  * 本插件唯一用例（InstanceSelect 实例选择器）用到：portal 定位、align='end'、
  * 数据行（danger/图标/禁用）、label/separator 行、选中勾标、键盘行走（↑↓/Home/End）、
  * Escape/Tab/外点/iframe-blur 关闭、模态让位（isBehindModal）、组合输入守卫。

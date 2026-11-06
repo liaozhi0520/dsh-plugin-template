@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 本地版本 bump 测试台（Verdaccio）——「版本提示」弹窗（available）与「卸载重装免重启生效」的端到端验证。
+ * 本地版本 bump 测试台（Verdaccio）——「插件页更新流程」与「更新后免重启即跑新代码」的端到端验证。
  *
  * 用法（`pnpm test-version-bump --help` 打印同一份说明）：
  *   pnpm test-version-bump                                    交互式：先选模式（缺省 bump）
@@ -8,6 +8,12 @@
  *   pnpm test-version-bump --mode commit --a <ref> --b <ref>   commit 模式（非交互指定两个 commit）
  *   node scripts/test-version-bump.mjs --help
  *   （若 pnpm 吞掉了参数，用 `pnpm test-version-bump -- --mode commit …`）
+ *
+ * 测的是 0.2.2 起的**更新流程**：插件页对本插件提供「版本」区与更新对话框
+ * （检查 → 卸载旧版 → 安装新版，失败回滚），更新后 harness 自行驱逐旧模块，
+ * 无需重启。本插件**不再做任何更新提醒**（无 shell.overlay 弹窗/无面板更新条/
+ * 自身不查 registry）——脚本的验收点就是「插件页能更新」+「更新后跑新代码」+
+ * 「全程不出现任何提醒」。
  *
  * 两种模式的差别只在「两个被测版本从哪来」：
  *
@@ -25,13 +31,19 @@
  *   - **commit b 不是最新提交** → 不做任何改动，打出警告并**直接退出**（exit 2）：
  *     给一个非尖端提交凭空造版本号会与实际发布线脱节，没有可测语义。
  *   两版 version 本来就不同时直接用各自的 version；若版本 B 不大于版本 A 只警告
- *   （latest < running，available 弹窗不会出现，属降级场景）。
+ *   （latest < running，插件页不会给出更新条目，属降级场景）。
  *
  * 共同纪律：
  *   - dsh 内一律通过 Verdaccio npm 源安装被测包，**文件夹形式安装的副本不参与测试**；
- *   - 还原（revertAll）是默认行为：正常结束、出错、Ctrl+C 退出前都会执行——候选源回官方
- *     两源 + 版本号回滚（bump 模式）+ 临时 worktree 删除（commit 模式）+ 重建（bump 模式）
- *     + 停 Verdaccio；
+ *   - **profile registry 是插件页「版本」检查的唯一来源**：0.2.2 起版本区由官方
+ *     plugin-manager 提供，`pnpm config get registry`（cwd = profile）决定问哪个源，
+ *     UI 的「重新检查」不带 registry 参数。故测试期把
+ *     `~/.dsh/profiles/desktop/.npmrc` 临时写成 `registry=http://127.0.0.1:4873/`，
+ *     结束时严格还原（原本没有就删掉）——否则「重新检查」永远打 npmjs、
+ *     看不到本地发布的新版本。插件自身不查 registry，版本检查来源只有这里；
+ *   - 还原（revertAll）是默认行为：正常结束、出错、Ctrl+C 退出前都会执行——版本号回滚
+ *     （bump 模式）+ 临时 worktree 删除（commit 模式）+ 重建（bump 模式）+
+ *     还原 profile registry + 停 Verdaccio；
  *   - 所有测试资产（verdaccio 配置 / htpasswd / 发布凭据 / tgz / 包数据 / 日志 / bump 状态 /
  *     临时 worktree）都集中在 git-ignored 的 .verdaccio-storage/——整删即净，仓库无残留。
  *
@@ -74,18 +86,20 @@ const STATE_PATH = join(STORAGE_DIR, 'version-bump-state.json')
 const VERDACCIO_LOG_PATH = join(STORAGE_DIR, 'verdaccio.log')
 /** verdaccio 的数据目录（storage 的落盘位置；启动前显式创建，避免首次启动时自建失败）。 */
 const STORAGE_DATA_PATH = join(STORAGE_DIR, 'storage')
-const REGISTRY_SOURCE_RELATIVE_PATH = join('src', 'shared', 'registry-latest.ts')
-const REGISTRY_SOURCE_PATH = join(ROOT, REGISTRY_SOURCE_RELATIVE_PATH)
 const REGISTRY_URL = 'http://127.0.0.1:4873'
+/** 桌面 profile 根（插件安装位置 + 生效的 pnpm 配置所在）。 */
+const PROFILE_DIR = join(homedir(), '.dsh', 'profiles', 'desktop')
+/**
+ * 桌面 profile 的 `.npmrc`：**插件页「版本」检查的 registry 来源**。
+ * 0.2.2 起官方 plugin-manager 用 `pnpm config get registry`（cwd = profile）决定
+ * 问哪个源；插件自己已不查 registry，所以测试期必须把它临时指向 Verdaccio，
+ * 否则「重新检查」永远打 npmjs、看不到本地发布的版本。
+ */
+const PROFILE_NPMRC = join(PROFILE_DIR, '.npmrc')
 /** 桌面 profile 的 node_modules 根（文件夹安装副本的所在地）。 */
-const DESKTOP_NODE_MODULES = join(homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
+const DESKTOP_NODE_MODULES = join(PROFILE_DIR, 'node_modules')
 /** commit 模式的临时 worktree 根（git-ignored，测试后随目录一起删）。 */
 const WORKTREES_DIR = join(STORAGE_DIR, 'worktrees')
-
-/** 官方两源候选（干净基线形态；注入/还原都以这一行为锚）。 */
-const OFFICIAL_CANDIDATES = "['https://registry.npmjs.org', 'https://registry.npmmirror.com']"
-/** 注入后的候选（Verdaccio 首位，失败自动降级官方两源）。 */
-const INJECTED_CANDIDATES = "['http://127.0.0.1:4873', 'https://registry.npmjs.org', 'https://registry.npmmirror.com']"
 
 /** 前置条件不成立（本次不可测、未做任何改动）时的退出码。 */
 const EXIT_PRECONDITION = 2
@@ -141,7 +155,7 @@ const TEST_PASSWORD = 'test123'
 // 运行时状态（跨阶段/还原出口共享；在函数求值前完成初始化）
 // ---------------------------------------------------------------------------
 
-/** 工作区是否被本脚本改过（注入候选源 / bump 版本）——只有改过才需要重建。 */
+/** 工作区是否被本脚本改过（bump 版本）——只有改过才需要重建。 */
 let workspaceDirty = false
 /** 当前模式（决定还原路径）；在 main 选完模式后立即赋值。 */
 let activeMode = 'bump'
@@ -151,8 +165,13 @@ const activeWorktrees = []
 let activeVerdaccioChild
 /** 还原守卫标记。 */
 let reverted = false
+/**
+ * 注入前的 profile `.npmrc`：undefined = 尚未注入；null = 原本不存在（还原时删除）；
+ * string = 原内容（还原时写回）。
+ */
+let profileNpmrcBackup
 
-const USAGE = `本地版本 bump 测试台（Verdaccio）——「版本提示」弹窗的端到端验证
+const USAGE = `本地版本 bump 测试台（Verdaccio）——插件页更新流程 + 更新后免重启的端到端验证
 
 用法：
   pnpm test-version-bump                                    交互式：先选模式（缺省 bump）
@@ -175,7 +194,7 @@ function warn(message) { console.warn(`[test-version-bump] 警告：${message}`)
 
 /**
  * 以异常结束当前流程；还原交给调用方的 finally（revertAll 是默认行为，
- * 不用 process.exit——那会跳过 finally，留下注入态）。
+ * 不用 process.exit——那会跳过 finally，留下半完成态）。
  */
 function fail(message) {
   throw new Error(message)
@@ -437,30 +456,6 @@ function buildInWorktree(dir) {
   info('   在临时 worktree 安装依赖并构建（pnpm install --frozen-lockfile --prefer-offline → pnpm run build）……')
   runStep('pnpm', ['install', '--frozen-lockfile', '--prefer-offline'], dir)
   runStep('pnpm', ['run', 'build'], dir)
-}
-
-// ---------------------------------------------------------------------------
-// registry 候选源注入（工作区 or worktree：同一份源码形态）
-// ---------------------------------------------------------------------------
-
-/** 注入/还原候选源首位（精确锚点替换；两态均可重入）。baseDir = 承载源码的目录根。 */
-function patchRegistrySource(inject, baseDir = ROOT) {
-  const sourcePath = join(baseDir, REGISTRY_SOURCE_RELATIVE_PATH)
-  const where = baseDir === ROOT ? '工作区' : baseDir
-  if (!existsSync(sourcePath)) {
-    fail(`${baseDir} 下没有 ${REGISTRY_SOURCE_RELATIVE_PATH}——该代码树早于本地候选源机制，无法注入 Verdaccio 候选源`)
-  }
-  const source = readFileSync(sourcePath, 'utf8')
-  const injected = source.includes('http://127.0.0.1:4873')
-  if (inject && injected) { info(`registry-latest.ts 候选源已注入（${where}），跳过`); return }
-  if (!inject && !injected) { info(`registry-latest.ts 候选源已是干净两源（${where}），跳过`); return }
-  const next = inject
-    ? source.replace(OFFICIAL_CANDIDATES, INJECTED_CANDIDATES)
-    : source.replace(INJECTED_CANDIDATES, OFFICIAL_CANDIDATES)
-  if (next === source) fail(`候选源锚点未命中——${sourcePath} 的 FALLBACK_REGISTRY_CANDIDATES 形态与预期不符，请人工检查`)
-  writeFileSync(sourcePath, next)
-  if (inject && baseDir === ROOT) workspaceDirty = true
-  info(inject ? `已注入本地 Verdaccio 候选源（${where}）` : `已还原候选源为官方两源（${where}）`)
 }
 
 // ---------------------------------------------------------------------------
@@ -728,6 +723,53 @@ function stopVerdaccioForNextPhase() {
 }
 
 // ---------------------------------------------------------------------------
+// 桌面 profile 的 registry 指向（插件页「版本」检查的来源）
+// ---------------------------------------------------------------------------
+
+/**
+ * 把桌面 profile 的 pnpm registry 临时指向 Verdaccio，或还原原状。
+ *
+ * 为什么需要：0.2.2 起「插件」页的版本区由官方 plugin-manager 提供，它执行
+ * `pnpm config get registry`（cwd = profile）决定问哪个源——UI 的「重新检查」
+ * **不带 registry 参数**，所以只能靠 profile 生效配置。插件自己已不查 registry
+ * （0.2.2 起无更新提示），因此旧的「向插件源码注入本地源」手段失效，注入点
+ * 必须是这里。
+ *
+ * 注入内容只有一行 `registry=`；用户全局 `.npmrc` 里的其它配置（npmjs 的
+ * authToken 等）仍然合并生效，Verdaccio 侧 `access: $all` 也不需要凭据。
+ * Verdaccio 配了 `proxy: npmjs` uplink，所以依赖解析仍能回源。
+ *
+ * 还原是默认行为（revertAll 调用）：原本没有 `.npmrc` 就删掉，有就写回原内容。
+ * @param inject - true 注入 Verdaccio；false 还原。
+ */
+function pointProfileAtRegistry(inject) {
+  if (inject) {
+    if (profileNpmrcBackup !== undefined) {
+      info(`profile registry 已指向 ${REGISTRY_URL}/，跳过`)
+      return
+    }
+    if (!existsSync(PROFILE_DIR)) fail(`桌面 profile 不存在：${PROFILE_DIR}（先让 dsh 桌面版创建 profile）`)
+    profileNpmrcBackup = existsSync(PROFILE_NPMRC) ? readFileSync(PROFILE_NPMRC, 'utf8') : null
+    writeFileSync(
+      PROFILE_NPMRC,
+      '# 由 scripts/test-version-bump.mjs 临时写入，测试结束自动还原\n'
+      + `registry=${REGISTRY_URL}/\n`,
+    )
+    info(`已将桌面 profile 的 pnpm registry 临时指向 ${REGISTRY_URL}/（插件页「版本」检查读它）`)
+    return
+  }
+  if (profileNpmrcBackup === undefined) return
+  if (profileNpmrcBackup === null) {
+    rmSync(PROFILE_NPMRC, { force: true })
+    info('已删除临时写入的 profile .npmrc（原本不存在）')
+  } else {
+    writeFileSync(PROFILE_NPMRC, profileNpmrcBackup)
+    info('已还原 profile .npmrc 原内容')
+  }
+  profileNpmrcBackup = undefined
+}
+
+// ---------------------------------------------------------------------------
 // 桌面 profile 残留清理
 // ---------------------------------------------------------------------------
 
@@ -762,16 +804,17 @@ function removeLegacyInstallDir(pkgName) {
 // ---------------------------------------------------------------------------
 
 /** 统一还原出口：模式感知。
- * - bump 模式：候选源回官方两源 + 版本号回滚（如有状态）+ 重建（工作区被改过才做）+ 停 Verdaccio；
+ * - bump 模式：版本号回滚（如有状态）+ 重建（工作区被改过才做）+ 停 Verdaccio；
  * - commit 模式：删临时 worktree（工作区自始至终未被改动，故不还原、不重建）+ 停 Verdaccio。 */
 function revertAll() {
   if (activeMode === 'commit') {
     removeWorktrees()
   } else {
-    patchRegistrySource(false)
     restoreVersionIfBumped()
     if (workspaceDirty) runStep('pnpm', ['run', 'build'])
   }
+  // 两种模式都要还原 profile registry（否则用户之后所有 pnpm 操作都会打 Verdaccio）。
+  pointProfileAtRegistry(false)
   stopVerdaccio(activeVerdaccioChild)
 }
 
@@ -810,7 +853,7 @@ function planBumpMode() {
   const manifest = readManifest()
   const versionA = manifest.version
   const versionB = nextVersion(versionA)
-  info(`当前版本 ${versionA}；测试流程：Verdaccio 发布 ${versionA} → 你安装（新装插件，不用重启）→ bump 到 ${versionB} 构建并发布 → 卸载后安装新版本（不重启）验证免重启生效 → 还原`)
+  info(`当前版本 ${versionA}；测试流程：Verdaccio 发布 ${versionA} → 你安装（新装插件，不用重启）→ bump 到 ${versionB} 构建并发布 → 插件页更新到新版本（不重启）验证更新流程 + 免重启生效 → 还原`)
   return { mode: 'bump', pkgName: manifest.name, versionA, versionB }
 }
 
@@ -849,7 +892,7 @@ async function planCommitMode(rl, options) {
   info(`版本 B = ${versionB}（commit b：${describeCommit(shaB)}）${bumped ? `——b 与 a 版本相同（${manifestA.version}），且 b 是当前最新提交，故在 b 的临时 worktree 里把版本 patch+1 作为新版本（不提交，随 worktree 丢弃）` : ''}`)
   info(`包名 ${pkgName}；两个版本都在 .verdaccio-storage/worktrees/ 下的临时 worktree 里构建，工作区不被触碰。`)
   if (compareVersions(versionB, manifestA.version) <= 0) {
-    warn(`版本 B（${versionB}）不大于版本 A（${manifestA.version}）——latest ≤ running，available 更新弹窗不会出现（可用于降级场景验证）。`)
+    warn(`版本 B（${versionB}）不大于版本 A（${manifestA.version}）——latest ≤ running，插件页不会给出更新条目（可用于降级场景验证）。`)
   }
   return { mode: 'commit', pkgName, versionA: manifestA.version, versionB, shaA, shaB, bumped }
 }
@@ -858,11 +901,13 @@ async function planCommitMode(rl, options) {
 // 两种模式的执行流程（① 准备 → … → ⑩ 还原提示）
 // ---------------------------------------------------------------------------
 
-/** ①② 共用：卸载 → 重启 dsh → 清理文件夹安装残留（文件夹副本不参与本测试）。 */
+/** ①② 共用：卸载 → 重启 dsh → 清理文件夹安装残留 → profile registry 指向 Verdaccio。 */
 async function phasePrepare(rl, pkgName) {
   info('① 测试准备：请先在 dsh 插件页卸载本插件（文件夹形式安装/仍在运行的话）→ **重启 dsh**；')
-  await rl.question('   重启完成后按回车，脚本将清理桌面 profile 里的文件夹安装残留……')
+  await rl.question('   重启完成后按回车，脚本将清理桌面 profile 里的文件夹安装残留，并把 profile registry 临时指向 Verdaccio……')
   removeLegacyInstallDir(pkgName)
+  // 必须在用户安装/检查之前注入：插件页「版本」检查读的就是 profile 生效的 registry。
+  pointProfileAtRegistry(true)
 }
 
 async function runBumpMode(rl, plan) {
@@ -871,20 +916,19 @@ async function runBumpMode(rl, plan) {
   await phasePrepare(rl, pkgName)
 
   // ---- Phase 1：当前版本 → 构建并发布到 Verdaccio → 用户经 npm 源安装 ----
-  info('② 注入本地候选源并构建（烧录进 host 半）……')
-  patchRegistrySource(true)
+  info('② 构建版本 A（工作区当前版本；locale 显示元数据随包清单版本）……')
   runStep('pnpm', ['run', 'build'])
   const pack1 = packTarball(ROOT, versionA)
 
   await publishAndVerify(pkgName, pack1.tarballPath, versionA, '③')
 
-  info(`④ 请到 dsh 插件添加页：选择自定义 npm 源并填入 ${REGISTRY_URL}/ → 安装 ${pkgName}@${versionA} → **新装插件，不用重启 dsh**（装完 host 半即加载这份带本地候选源的构建）……`)
+  info(`④ 请到 dsh 插件添加页：源已默认指向 ${REGISTRY_URL}/（profile registry 已临时改），直接安装 ${pkgName}@${versionA} → **新装插件，不用重启 dsh**……`)
   await rl.question('   安装完成后按回车，脚本将停止 Verdaccio 并进入 bump 阶段……')
   // 用户明确要求：安装完毕后结束当前 Verdaccio（下一阶段重新启动再发布）。
   stopVerdaccioForNextPhase()
 
-  // ---- Phase 2：bump + build + 发布新版本 → 用户安装（不重启）→ 验证免重启生效 ----
-  info(`⑤ bump version ${versionA} → ${versionB}，并重新构建（locale 显示元数据跟随新版本；dsh 内副本是 verdaccio 安装的复制品，不受 workspace 构建影响，无 client-hmr 干扰）……`)
+  // ---- Phase 2：bump + build + 发布新版本 → 插件页更新（不重启）→ 验证免重启生效 ----
+  info(`⑤ bump version ${versionA} → ${versionB}，并重新构建（locale 显示元数据跟随新版本）……`)
   bumpVersion(versionB)
   recordBumpState(versionA, versionB)
   workspaceDirty = true
@@ -893,15 +937,18 @@ async function runBumpMode(rl, plan) {
 
   await publishAndVerify(pkgName, pack2.tarballPath, versionB, '⑥')
 
-  info(`⑦ 现在可去 dsh 测试 available：到「插件」页把本插件的启动/关闭开关点一次（该操作会跑一次检查更新）→ latest ${versionB} > running ${versionA} → available 更新弹窗（此刻运行中的仍是 ${versionA}，只弹这一个弹窗）。`)
-  await rl.question('⑧ available 验证完成后按回车：先卸载本插件、再安装新版本以验证免重启生效（**不重启**）……')
+  info(`⑦ 去「插件」页本插件的**版本**区点「重新检查」：它用 profile registry（已临时指向 ${REGISTRY_URL}/）查询，应列出 ${versionB} → 点更新 → 对话框按「检查 → 卸载旧版 → 安装新版」走完（失败会回滚）。`)
+  info(`   前提：桌面壳 0.2.2-rc.1+（本插件 peer 窗口）；此刻运行中的仍是 ${versionA}。`)
+  info(`   若仍显示「已是最新」：在 profile 目录执行 \`pnpm config get registry\` 确认是 ${REGISTRY_URL}/，并确认 Verdaccio 在跑。`)
+  info('   同时确认本次流程里**没有任何更新提醒**：无 shell.overlay 弹窗、面板里没有更新条（0.2.2 起插件不做更新提示）。')
+  await rl.question('⑧ 插件页更新完成后按回车（**不重启 dsh**），进入免重启生效检查……')
 
-  info(`⑨ 请到「插件」页本插件的详情页：先**卸载**本插件，再经自定义 npm 源**安装** ${pkgName}@${versionB} → **不重启 dsh** →`)
-  info(`   预期（0.2.1 起 harness 会在重装时驱逐旧模块）：插件立刻以 ${versionB} 运行——`)
-  info(`   ① 详情页/更新条显示的当前版本 = ${versionB}，且**不弹任何"陈旧代码"对话框**（旧防护已拆除，见 docs/harness-defect-workarounds.md）；`)
+  info(`⑨ 预期（0.2.2 起 harness 在更新/重装时驱逐旧模块）：插件立刻以 ${versionB} 运行——`)
+  info(`   ① 详情页显示的版本 = ${versionB}，没有"需要重启/重新加载"提示；`)
   info('   ② 面板与业务端点跑的是新版本代码（改了 UI/文案时肉眼可辨）；')
-  info(`   ③ 反证：若仍显示 ${versionA}，说明上游驱逐失效 → 记录并回报（旧防护已按回退清单拆除，不再用代码兜底）。`)
-  await rl.question('⑩ 免重启验证完成后按回车，脚本将自动还原（候选源回官方两源 + 版本号回滚 + 重建 + 停 Verdaccio）……')
+  info(`   ③ 反证：若仍显示 ${versionA}，说明上游驱逐失效 → 记录并回报（不再用代码兜底）。`)
+  info('   ④ 若插件页更新不可用（旧壳/网络），退回：卸载 → 直接安装新版本，同样不重启验证。')
+  await rl.question('⑩ 验证完成后按回车，脚本将自动还原（版本号回滚 + 重建 + 还原 profile registry + 停 Verdaccio）……')
 }
 
 async function runCommitMode(rl, plan) {
@@ -910,37 +957,38 @@ async function runCommitMode(rl, plan) {
   await phasePrepare(rl, pkgName)
 
   // ---- Phase 1：commit a 的代码 → 版本 A → 发布 → 用户安装（新装，不必重启） ----
-  info('② 构建版本 A：临时 worktree（工作区不被触碰）→ 注入本地候选源 → 安装依赖并构建 → 打包……')
+  info('② 构建版本 A：临时 worktree（工作区不被触碰）→ 安装依赖并构建 → 打包……')
   const worktreeA = createWorktree(shaA, 'a')
-  patchRegistrySource(true, worktreeA)
   buildInWorktree(worktreeA)
   const pack1 = packTarball(worktreeA, versionA)
 
   await publishAndVerify(pkgName, pack1.tarballPath, versionA, '③')
 
-  info(`④ 请到 dsh 插件添加页：选择自定义 npm 源并填入 ${REGISTRY_URL}/ → 安装 ${pkgName}@${versionA} → **新装插件，不用重启 dsh**（装完 host 半即加载这份带本地候选源的构建）……`)
+  info(`④ 请到 dsh 插件添加页：源已默认指向 ${REGISTRY_URL}/（profile registry 已临时改），直接安装 ${pkgName}@${versionA} → **新装插件，不用重启 dsh**……`)
   await rl.question('   安装完成后按回车，脚本将停止 Verdaccio 并进入版本 B 阶段……')
   stopVerdaccioForNextPhase()
 
-  // ---- Phase 2：commit b 的代码（必要时临时 bump 版本）→ 版本 B → 发布 → 不重启安装 → 验证免重启生效 ----
+  // ---- Phase 2：commit b 的代码（必要时临时 bump 版本）→ 版本 B → 发布 → 插件页更新 → 验证免重启生效 ----
   info(`⑤ 构建版本 B${bumped ? `：b 与 a 的版本相同（${versionA}），在 b 的 worktree 里把版本临时 bump 到 ${versionB}（只改工作文件、不提交，随 worktree 一起丢弃）` : `（commit b 自带版本 ${versionB}）`}……`)
   const worktreeB = createWorktree(shaB, 'b')
-  patchRegistrySource(true, worktreeB)
   if (bumped) bumpVersion(versionB, worktreeB)
   buildInWorktree(worktreeB)
   const pack2 = packTarball(worktreeB, versionB)
 
   await publishAndVerify(pkgName, pack2.tarballPath, versionB, '⑥')
 
-  info(`⑦ 现在可去 dsh 测试 available：到「插件」页把本插件的启动/关闭开关点一次（该操作会跑一次检查更新）→ latest ${versionB} > running ${versionA} → available 更新弹窗（此刻运行中的仍是 ${versionA}，只弹这一个弹窗）。`)
-  await rl.question('⑧ available 验证完成后按回车：先卸载本插件、再安装版本 B 以验证免重启生效（**不重启**）……')
+  info(`⑦ 去「插件」页本插件的**版本**区点「重新检查」：它用 profile registry（已临时指向 ${REGISTRY_URL}/）查询，应列出 ${versionB} → 点更新 → 对话框按「检查 → 卸载旧版 → 安装新版」走完（失败会回滚）。`)
+  info(`   前提：桌面壳 0.2.2-rc.1+（本插件 peer 窗口）；此刻运行中的仍是 ${versionA}。`)
+  info(`   若仍显示「已是最新」：在 profile 目录执行 \`pnpm config get registry\` 确认是 ${REGISTRY_URL}/，并确认 Verdaccio 在跑。`)
+  info('   同时确认本次流程里**没有任何更新提醒**：无 shell.overlay 弹窗、面板里没有更新条（0.2.2 起插件不做更新提示）。')
+  await rl.question('⑧ 插件页更新完成后按回车（**不重启 dsh**），进入免重启生效检查……')
 
-  info(`⑨ 请到「插件」页本插件的详情页：先**卸载**本插件，再经自定义 npm 源**安装** ${pkgName}@${versionB} → **不重启 dsh** →`)
-  info(`   预期（0.2.1 起 harness 会在重装时驱逐旧模块）：插件立刻以 ${versionB} 运行——`)
-  info(`   ① 详情页/更新条显示的当前版本 = ${versionB}，且**不弹任何"陈旧代码"对话框**（旧防护已拆除，见 docs/harness-defect-workarounds.md）；`)
+  info(`⑨ 预期（0.2.2 起 harness 在更新/重装时驱逐旧模块）：插件立刻以 ${versionB} 运行——`)
+  info(`   ① 详情页显示的版本 = ${versionB}，没有"需要重启/重新加载"提示；`)
   info('   ② 面板与业务端点跑的是新版本代码（改了 UI/文案时肉眼可辨）；')
-  info(`   ③ 反证：若仍显示 ${versionA}，说明上游驱逐失效 → 记录并回报（旧防护已按回退清单拆除，不再用代码兜底）。`)
-  await rl.question('⑩ 免重启验证完成后按回车，脚本将自动还原（删除临时 worktree + 停 Verdaccio；工作区自始至终未被改动）……')
+  info(`   ③ 反证：若仍显示 ${versionA}，说明上游驱逐失效 → 记录并回报（不再用代码兜底）。`)
+  info('   ④ 若插件页更新不可用（旧壳/网络），退回：卸载 → 直接安装版本 B，同样不重启验证。')
+  await rl.question('⑩ 验证完成后按回车，脚本将自动还原（删除临时 worktree + 还原 profile registry + 停 Verdaccio；工作区自始至终未被改动）……')
 }
 
 // ---------------------------------------------------------------------------

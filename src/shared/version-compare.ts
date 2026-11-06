@@ -2,8 +2,8 @@
  * 严格 semver 比较（含预发布标识，忽略 build 元数据）——host/client 共用的
  * 纯函数（零依赖：client bundle 会内联本文件，不得引入任何 Node 依赖）。
  *
- * 使用方：version-gate.ts 的窗口判定、update-state.ts 比较运行中版本与
- * registry latest（available 判定）、client 停用面板比较插件当前版本与 registry latest。
+ * 使用方：version-gate.ts 的窗口判定（[MIN,MAX] 双边界）。【0.2.2 起】
+ * 版本提示与 registry 自查链路已删除，本模块不再参与任何「是否最新」判定。
  *
  * @returns a<b -> -1，a=b -> 0，a>b -> 1。
  */

@@ -1,9 +1,13 @@
 /**
  * dsh-plugin-template, browser half: registers the demo configuration page on
  * the Plugins page (plugins.bundle.config, keyed by this bundle's package
- * name — 问候语编辑器 + ping 演示 + 插件更新条), and the version-notice entry
- * on `shell.overlay`（NoticeModal）.
+ * name — 问候语编辑器 + ping 演示).
  * 数据经 host 半代理（template/*）读写。
+ *
+ * 【0.2.2 起】方案 A：不再注册 shell.overlay 版本提醒条目、不再有面板更新条、
+ * 不再查 registry——插件零出网，版本检查/更新由官方插件页（plugin-manager
+ * 的 Versions 区）接管。见 docs/compat-plan-0.2.2-rc.1.md。
+ *
  * 唯一生效路径 = `pnpm build` 后重启/重装 DeepSeek Harness（无热更工作流）。
  * host 半门禁软禁用时（index.html 注入了 DISABLED_GLOBAL 标记），本入口
  * 只挂"已停用"说明面板，不注册任何业务能力。
@@ -13,39 +17,35 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: ctx.slots 服务增强（SlotRegistry 归属 dsh-client-ui-renderer）。
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-// Type-only: ctx.locale service augmentation (LocaleRuntime + 'locale/change' 事件
-// + TranslateNS 类型——GlobalNotice 的槽位外翻译函数)。
+// Type-only: ctx.locale service augmentation (LocaleRuntime + 'locale/change' 事件).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the Plugins page's SlotMap merge (the 'plugins.bundle.config' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-// Type-only: pulls the app frame's SlotMap merge (the 'shell.overlay' entry — 版本提醒条目).
-import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { TEMPLATE_NS, en, zh, type TemplatePanelKey } from './locales'
 import { BUNDLE_KEY as bundleKey } from './bundle-key'
-import { DISABLED_GLOBAL, type DisabledFlag, type DisabledPluginStatus } from '../shared/disabled-flag'
-import { checkUpdateViaHost, getConfigViaHost, getUpdateStateViaHost, pingHost, saveConfigViaHost } from './api'
+import { DISABLED_GLOBAL, type DisabledFlag } from '../shared/disabled-flag'
+import { getConfigViaHost, pingHost, saveConfigViaHost } from './api'
 import { TemplateSection, type TemplateSectionInjected } from './TemplateSection'
 import { TemplateDisabledSection, type TemplateDisabledSectionInjected } from './TemplateDisabledSection'
-import { GlobalNotice, type GlobalNoticeInjected } from './GlobalNotice'
 
 export const name = 'dsh-plugin-template'
 export const inject = ['slots', 'locale', 'connection']
 
 /**
- * plugins.bundle.config 槽位的注册 key：见 ./bundle-key.ts（与升级提示的
- * 安装 spec 命令片共用同一来源；smoke-offline 0c 节守护与包清单一致）。
+ * plugins.bundle.config 槽位的注册 key：见 ./bundle-key.ts（smoke-offline 0c 节
+ * 守护与包清单一致）。
  */
 const BUNDLE_KEY = bundleKey
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** 面板与版本提醒条目的文案。 */
+    /** 面板与停用说明的文案。 */
     'template.panel': TemplatePanelKey
   }
 }
 
 export function apply(ctx: ClientContext): void {
-  console.log('[dsh-plugin-template] client half loaded (plugins page config + version notices)')
+  console.log('[dsh-plugin-template] client half loaded (plugins page config)')
 
   // 注册本插件的双语词典（zh/en 键集一致，注册即完成校验）；
   // ctx.effect 让词典随插件停用自动撤下。
@@ -59,17 +59,8 @@ export function apply(ctx: ClientContext): void {
     const min = typeof disabledFlag.min === 'string' ? disabledFlag.min : ''
     const max = typeof disabledFlag.max === 'string' ? disabledFlag.max : ''
     const installVersion = typeof disabledFlag.installVersion === 'string' ? disabledFlag.installVersion : ''
-    // 当前 harness 版本（host 半尽力解析；缺席 = 两锚点全失败 → 面板不渲染该行）。
+    // 当前 harness 版本（host 半尽力解析；缺席 = 锚点全失败 → 面板不渲染该行）。
     const runtimeVersion = typeof disabledFlag.runtimeVersion === 'string' ? disabledFlag.runtimeVersion : null
-    // 插件版本标识（旧 host / 包清单不可读时缺席 → null，面板不渲染该段）；
-    // 「是否最新」由面板组件自查 registry（disabled-version-check.ts）。
-    const rawPlugin: unknown = disabledFlag.plugin
-    const plugin: DisabledPluginStatus | null = typeof rawPlugin === 'object' && rawPlugin !== null
-      ? {
-          name: typeof (rawPlugin as DisabledPluginStatus).name === 'string' ? (rawPlugin as DisabledPluginStatus).name : '',
-          installed: typeof (rawPlugin as DisabledPluginStatus).installed === 'string' ? (rawPlugin as DisabledPluginStatus).installed : '',
-        }
-      : null
     console.warn('[dsh-plugin-template] host half disabled:', reason)
     ctx.slots.inject('plugins.bundle.config', () =>
       ctx.slots.register(
@@ -77,7 +68,7 @@ export function apply(ctx: ClientContext): void {
           name: 'plugins.bundle.config',
           key: BUNDLE_KEY,
           locale: TEMPLATE_NS,
-          inject: (): TemplateDisabledSectionInjected => ({ reason, min, max, installVersion, runtimeVersion, plugin }),
+          inject: (): TemplateDisabledSectionInjected => ({ reason, min, max, installVersion, runtimeVersion }),
         },
         TemplateDisabledSection,
       ),
@@ -89,8 +80,8 @@ export function apply(ctx: ClientContext): void {
   // 官方未给 client 侧 Context 增补 connection 属性，get + 类型断言是收敛的取法。
   const connection = ctx.get('connection') as ConnectionHandle
 
-  // plugins.bundle.config：demo 配置页（问候语编辑器 + ping 演示 + 插件更新条），
-  // 渲染在「插件」页本组合包详情页的描述与「包含的组件」之间（ui-plugin-manager
+  // plugins.bundle.config：demo 配置页（问候语编辑器 + ping 演示），渲染在
+  // 「插件」页本组合包详情页的描述与「包含的组件」之间（ui-plugin-manager
   // 声明的槽位，key 必须逐字等于 package.json 的 name——见 BUNDLE_KEY 的注释）。
   ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register(
@@ -103,34 +94,10 @@ export function apply(ctx: ClientContext): void {
             ping: (text) => pingHost(connection.rpc, text),
             getConfig: () => getConfigViaHost(connection.rpc),
             saveConfig: (value) => saveConfigViaHost(connection.rpc, value),
-            getUpdateState: () => getUpdateStateViaHost(connection.rpc),
-            checkUpdate: () => checkUpdateViaHost(connection.rpc),
           },
         }),
       },
       TemplateSection,
-    ),
-  )
-
-  // 版本提醒条目（shell.overlay，NoticeModal · neutral）：registry 检查到
-  // available 时弹新版本提示，「我知道了」仅内存态关闭（见 GlobalNotice.tsx）。
-  // 【0.2.1 起】旧的「陈旧代码」danger 对话框（StaleBanner + BUILD_VERSION）已随
-  // 上游修复整体拆除：卸载 → 重装（不重启）由 harness 自己完成模块驱逐，不再出现
-  // 「新 UI + 旧内核」（2026-10-19 真机复核确认；取证见
-  // docs/harness-defect-workarounds.md 的历史防护回退块）。软禁用早退路径
-  // （上方）不注册本条目——彼时无 RPC，停用面板已承担版本修复指引。
-  ctx.slots.inject('shell.overlay', () =>
-    ctx.slots.register(
-      {
-        name: 'shell.overlay',
-        id: 'template-update-notice',
-        order: 101,
-        locale: TEMPLATE_NS,
-        inject: (): GlobalNoticeInjected => ({
-          api: { getUpdateState: () => getUpdateStateViaHost(connection.rpc) },
-        }),
-      },
-      GlobalNotice,
     ),
   )
 }

@@ -14,12 +14,15 @@
  * 端点表驱动：`template/*` 的描述符集中成 {@link DESCRIPTORS}（parameters 为
  * 位置参数名表，no-arg 端点传 `[]`），新增端点 = 表里加一行 + 服务对象加一个
  * 同名方法。codec 一律 src-json（仅 JSON 安全检查），边界校验在服务方法内。
+ *
+ * 【0.2.2 起】`template/checkUpdate` 与 `template/getUpdateState` 两个版本提示
+ * 端点已随方案 A 整体删除；插件不再查 registry、不再有更新状态机。端点表
+ * 只剩 ping / getConfig / saveConfig 三个演示端点（见
+ * docs/compat-plan-0.2.2-rc.1.md）。
  */
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-import { getUpdateMachineState, startUpdateCheck } from './update-state.js'
 import type { TemplateSettings, TemplateSettingsHandle } from './spec.js'
 import type { TemplateGetConfigResult, TemplateSaveConfigResult } from './shared/contract.js'
-import type { UpdateActionResult, UpdateStateResult } from './shared/update-contract.js'
 
 /** ping 请求。 */
 export interface TemplatePingRequest {
@@ -40,8 +43,6 @@ export const DESCRIPTORS: InvocationDescriptor[] = (
     ['ping', ['request']],
     ['getConfig', []],
     ['saveConfig', ['request']],
-    ['checkUpdate', []],
-    ['getUpdateState', []],
   ] as const
 ).map(([method, parameters]) => ({
   id: `dsh-plugin-template#template/${method}`,
@@ -103,28 +104,5 @@ export class TemplateRemote {
     }
     await this.settings.replace({ greeting, punctuation })
     return { ok: true }
-  }
-
-  // -----------------------------------------------------------------------
-  // RPC 端点：插件版本提示（状态机在 ./update-state.ts，host 半唯一权威源；
-  // 本类只是触发器 + 快照读取，不持有状态。无安装动作——发现新版本仅提示
-  // 用户到「插件」页卸载后重装）。
-  // -----------------------------------------------------------------------
-
-  /**
-   * 检查更新触发器：同步把状态机落为 checking 后立即返回触发后快照，
-   * registry 往返在 host 内异步完成；结论经 getUpdateState 轮询透出。
-   */
-  async checkUpdate(): Promise<UpdateActionResult> {
-    startUpdateCheck(true)
-    return { ok: true, state: getUpdateMachineState() }
-  }
-
-  /**
-   * 更新状态机快照（配置页更新条与全局提示弹窗的唯一读通道）。
-   * 纯状态读取，不会失败，也无网络请求。
-   */
-  async getUpdateState(): Promise<UpdateStateResult> {
-    return { ok: true, state: getUpdateMachineState() }
   }
 }

@@ -1,7 +1,7 @@
 /** Shared viewport inset for overlays, derived from the desktop frame's reserved top strip. */
 
 /**
- * 1:1 复制自 harness ui-primitives（src/overlay-top-margin.ts @ dsh-v0.2.1-rc.2）。追新时逐行 diff 复核。
+ * 1:1 复制自 harness ui-primitives（src/overlay-top-margin.ts @ dsh-v0.2.1-rc.2（0.2.2-rc.1 已复核，代码未同步））。追新时逐行 diff 复核。
  */
 
 /**

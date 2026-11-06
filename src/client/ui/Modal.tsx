@@ -1,6 +1,6 @@
 /**
  * 1:1 复制自 harness ui-primitives（c:/deepseek-harness/packages/client/ui-primitives/src/Modal.tsx，
- * @ dsh-v0.2.1-rc.2）。仅两处适配：图标改从本插件 ./icons 导入；导出 ModalProps
+ * @ dsh-v0.2.1-rc.2（0.2.2-rc.1 已复核，代码未同步））。仅两处适配：图标改从本插件 ./icons 导入；导出 ModalProps
  * 类型供插件自有包装层（NoticeModal）复用。其余逐字一致，追新时逐行 diff 复核。
  */
 import { useRef } from 'react'

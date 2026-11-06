@@ -8,8 +8,8 @@
  * 软禁用与 client 停用面板将没有机会运行。因此本文件刻意保持无业务，静态
  * import 图只允许包含不会被 harness API 漂移破坏的最小集合：
  * - ./version-gate.ts（node:fs/node:path + ./shared/version-compare 纯函数）、
- *   ./profile-gate.ts（type-only cordis）、./soft-disable.ts（→
- *   ./package-info.ts 的 node builtins + ./shared 纯数据/同构纯函数）；
+ *   ./profile-gate.ts（type-only cordis）、./soft-disable.ts（→ ./shared 纯数据/
+ *   同构纯函数；0.2.2 起不再回显插件版本，./package-info.ts 无调用方已删）；
  * - ./spec.ts（运行时仅 @deepseek-ai/schemastery）：不可约——`Config` 必须
  *   从入口值导出（Loader 只认领 apply 所在入口的 Config 导出，0.1.7 迁移
  *   踩坑），且 schema 求值本就发生在 Loader 侧、先于 apply，不新增风险面；
@@ -40,7 +40,8 @@ export const name = 'dsh-plugin-template'
 export { Config } from './spec.js'
 // cordis 对未声明 inject 的服务连属性探测（含 ctx.get）都直接抛错，故全部硬声明。
 // 缺服务的部署下插件保持 pending 不 crash；门禁决定业务是否真正注册。
-// （0.8.0 范式起不再声明 'pluginManager'——自更新安装通道已删除，插件只做版本提示。）
+// （0.8.0 范式起不再声明 'pluginManager'——自更新安装通道已删除；0.2.2 起
+// 插件连版本提示也不做，版本检查/更新由官方插件页 plugin-manager 接管。）
 export const inject = ['tools', 'typert', 'settings']
 
 export async function apply(ctx: Context, config: TemplateConfig): Promise<void> {

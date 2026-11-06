@@ -2,6 +2,9 @@
  * 浏览器端调用 host 半 `template/*` 端点的数据访问层。
  * 走通用 RPC 通道（ctx.connection.rpc.call），所有通道/业务错误都折叠进
  * OpResult 返回（不抛出）——面板据此内联报错或静默降级，不打断渲染。
+ *
+ * 【0.2.2 起】方案 A 删除了 checkUpdate / getUpdateState 两个更新端点，本层
+ * 只剩 ping / getConfig / saveConfig 三个业务端点；插件不再查 registry。
  */
 import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/client'
 import {
@@ -10,9 +13,7 @@ import {
   type TemplateGetConfigResult,
   type TemplateSaveConfigResult,
 } from '../shared/contract'
-import { UPDATE_ENDPOINT, type UpdateMachineState } from '../shared/update-contract'
 
-export type { UpdateMachineState } from '../shared/update-contract'
 export type { TemplateConfigValue } from '../shared/contract'
 
 /** 一次远端操作的 UI 侧统一结果。 */
@@ -86,38 +87,4 @@ export async function saveConfigViaHost(rpc: ClientConnectionRpc, value: Templat
   const unwrapped = unwrapBusiness(result.value)
   if (!unwrapped.ok) return { ok: false, kind: unwrapped.kind, detail: unwrapped.detail, code: unwrapped.code }
   return { ok: true, value: null }
-}
-
-/**
- * 读 host 半版本状态快照（配置页更新条与全局提示弹窗共用）。
- * host 状态机是唯一权威源（见 src/update-state.ts）：client 不持有更新状态，
- * 失败（含旧版 host 无此端点的自举窗口）由调用方静默降级，不打断渲染。
- * currentVersion 恒填运行中模块自报版本（「当前版本」的诚实口径）。
- */
-export async function getUpdateStateViaHost(rpc: ClientConnectionRpc): Promise<OpResult<UpdateMachineState>> {
-  const result = await callTemplate<{ ok: boolean; state?: UpdateMachineState; error?: { code?: string; message?: string } }>(
-    rpc,
-    UPDATE_ENDPOINT.getUpdateState,
-  )
-  if (!result.ok) return result
-  const body = result.value
-  if (!body || typeof body !== 'object') return { ok: false, kind: 'http', detail: 'bad result' }
-  if (!body.ok || body.state === undefined) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
-  return { ok: true, value: body.state }
-}
-
-/** 动作触发器的公共解包（checkUpdate 触发器形态：触发后快照）。 */
-function unwrapTrigger(
-  result: OpResult<{ ok: boolean; state?: UpdateMachineState; error?: { code?: string; message?: string } }>,
-): OpResult<UpdateMachineState> {
-  if (!result.ok) return result
-  const body = result.value
-  if (!body || typeof body !== 'object') return { ok: false, kind: 'http', detail: 'bad result' }
-  if (!body.ok || body.state === undefined) return { ok: false, kind: 'business', detail: body.error?.message ?? body.error?.code }
-  return { ok: true, value: body.state }
-}
-
-/** 触发检查更新：host 同步落 checking 后返回触发后快照，结论仍走轮询。 */
-export async function checkUpdateViaHost(rpc: ClientConnectionRpc): Promise<OpResult<UpdateMachineState>> {
-  return unwrapTrigger(await callTemplate(rpc, UPDATE_ENDPOINT.checkUpdate))
 }

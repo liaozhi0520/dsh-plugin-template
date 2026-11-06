@@ -1,6 +1,6 @@
 /**
  * 1:1 复制自 harness ui-primitives（c:/deepseek-harness/packages/client/ui-primitives/src/MenuSurface.tsx，
- * @ dsh-v0.2.1-rc.2）。追新时逐行 diff 复核。
+ * @ dsh-v0.2.1-rc.2（0.2.2-rc.1 已复核，代码未同步））。追新时逐行 diff 复核。
  */
 
 /** Shared menu material and the macOS backing that lets Chromium blur transparent windows. */
