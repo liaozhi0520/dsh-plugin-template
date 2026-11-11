@@ -153,7 +153,8 @@ harness 处于 0.x rc 快速迭代期，要点：
   `0.2.2-rc.1` / node `24.21.0`。`dsh.client.inject` 仍是 connection / locale /
   ui-plugin-manager 三项不变。
 - **版本门禁（单点窗口）**：`src/version-gate.ts` 声明支持窗口
-  `[0.2.2-rc.1, 0.2.2-rc.1]`（MIN = MAX），窗口外软禁用。版本源 = 桌面 runtime
+  `[0.2.2, 0.2.2]`（MIN = MAX；MIN/MAX 与运行时版本均只按 `major.minor.patch`
+  比较，`0.2.2-rc.1` 视为 `0.2.2`），窗口外软禁用。版本源 = 桌面 runtime
   内的 `@deepseek-ai/dsh` 包 version（**桌面单锚**：host 子进程 argv[2] =
   runtimeDir，读其 node_modules；不读 dsh-tools 等内嵌依赖——caret 实装版本
   可能高于本体）。软禁用 = 醒目日志 + 插件 no-op + client 停用说明面板
@@ -183,7 +184,7 @@ pnpm view @deepseek-ai/dsh-tools versions --json
 pnpm install
 pnpm typecheck && pnpm build && pnpm smoke-offline   # 红 = 上游破坏性变更，按 compat-plan 迁移清单修
 
-# ④ 实测通过后手动上调 src/version-gate.ts 的 MAX_HARNESS_VERSION（MIN 保持已实测的最低版本）
+# ④ 实测通过后手动上调 src/version-gate.ts 的 MAX_HARNESS_VERSION（写 major.minor.patch 核心版本；MIN 保持已实测的最低版本）
 # ⑤ 同一轮同步指引：rg -n '0\.2\.' AGENTS.md README.md src/version-gate.ts
 #    ——留旧窗口的指引 = 让后续 agent 照旧窗口写代码。
 ```
@@ -292,8 +293,9 @@ dsh plugin --profile desktop add github:<owner>/dsh-plugin-template#<commit-sha>
   `skipLibCheck`**（实测补齐后只是把缺失推给更下游）。唯一退化是
   `PluginPackageRef.availability → any`；真要用到该字段时在自己代码里本地声明
   联合类型并断言。详见 `docs/pitfalls.md` §7b。
-- **版本窗口纪律**：当前单点窗口 `[0.2.2-rc.1, 0.2.2-rc.1]`；MAX 只写已验证
-  tag；MIN = 已实测最低版本；同 tuple 追新只抬 MAX；tuple 变化/跨线迁移
+- **版本窗口纪律**：当前单点窗口 `[0.2.2, 0.2.2]`；MIN/MAX 与运行时版本都只按
+  major.minor.patch 比较（预发布后缀忽略）；MAX 只写已验证 tag 的核心版本；
+  MIN = 已实测最低版本；同 tuple 追新只抬 MAX；tuple 变化/跨线迁移
   MIN/MAX 一并上移 + 依赖下限同轮改写（详见 AGENTS.md 硬约定）。
 
 ## 文件清单
@@ -304,7 +306,7 @@ dsh plugin --profile desktop add github:<owner>/dsh-plugin-template#<commit-sha>
 ├── src/spec.ts                       # 0.1.7 settings 模型（volatile Config + SETTINGS_NS + 句柄）
 ├── src/profile-gate.ts               # desktop-only profile 门禁（profileContext 指纹）
 ├── src/soft-disable.ts               # 软禁用装配（两门禁 + 重模块图加载失败共用出口）
-├── src/version-gate.ts               # 版本门禁（单点 [0.2.2-rc.1, 0.2.2-rc.1] + 桌面单锚 argv[2]）
+├── src/version-gate.ts               # 版本门禁（单点 [0.2.2, 0.2.2]、major.minor.patch 比较 + 桌面单锚 argv[2]）
 ├── src/remote.ts                     # Typert 端点（表驱动描述符 + TemplateRemote 服务）
 ├── src/css-modules.d.ts              # CSS Modules 导入声明
 ├── src/shared/contract.ts            # 业务 RPC 契约（ping/getConfig/saveConfig）

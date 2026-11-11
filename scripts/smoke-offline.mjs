@@ -11,7 +11,7 @@
  * 0g) 包显示元数据守护：locale/{zh,en}.json（gen-version.mjs 生成）的 title
  *     与 locales.ts 词典同源、description 非空且携带当前 [MIN,MAX] 兼容窗口，
  *     meta.detail 已声明且指向存在的 Markdown（0.2.2 插件页详情区）；
- * 6a) 版本门禁桌面单锚（临时目录树复现 desktop spawn 形态：argv[2] = runtimeDir
+ * 6a) 版本门禁桌面单锚 + major.minor.patch 比较（临时目录树复现 desktop spawn 形态：argv[2] = runtimeDir
  *     → runtime 内 @deepseek-ai/dsh；锚点落空 / 包身份不符 → 抛错）；
  * 6f) 无更新状态机产物（0.2.2 起方案 A：update-state / registry-latest 与
  *     为「运行中代码版本」口径服务的 package-info 一并删除）；
@@ -22,7 +22,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { register } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveHarnessVersion } from '../lib/version-gate.js'
+import { assertHarnessSupported, resolveHarnessVersion, toCoreVersion } from '../lib/version-gate.js'
 
 let failed = 0
 function check(label, ok) {
@@ -212,6 +212,32 @@ try {
       `version anchor: argv[2]=runtimeDir → ${resolved.version}（anchor ${resolved.anchor}）`,
       resolved.version === '0.2.2-rc.1' && resolved.anchor === `desktop:${manifestPath}`,
     )
+    // 比较口径：manifest 的预发布版本只取 major.minor.patch；窗口常量同为三段。
+    check('version gate: 0.2.2-rc.1 → major.minor.patch = 0.2.2', toCoreVersion('0.2.2-rc.1') === '0.2.2')
+    let supportedError = ''
+    try {
+      assertHarnessSupported(['node', 'lib/index.js', runtimeDir])
+    } catch (error) {
+      supportedError = error instanceof Error ? error.message : String(error)
+    }
+    check('version gate: 0.2.2-rc.1 落在 [0.2.2, 0.2.2] 窗口内 → 通过', supportedError === '')
+    // 核心版本越界仍须拦截：0.2.3-rc.1（高）与 0.2.1（低）。
+    writeFileSync(manifestPath, JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.2.3-rc.1' }))
+    let aboveMaxError = ''
+    try {
+      assertHarnessSupported(['node', 'lib/index.js', runtimeDir])
+    } catch (error) {
+      aboveMaxError = error instanceof Error ? error.message : String(error)
+    }
+    check('version gate: 0.2.3-rc.1（核心 0.2.3 > MAX 0.2.2）→ 抛错', aboveMaxError.includes('<= 0.2.2'))
+    writeFileSync(manifestPath, JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.2.1' }))
+    let belowMinError = ''
+    try {
+      assertHarnessSupported(['node', 'lib/index.js', runtimeDir])
+    } catch (error) {
+      belowMinError = error instanceof Error ? error.message : String(error)
+    }
+    check('version gate: 0.2.1（< MIN 0.2.2）→ 抛错', belowMinError.includes('>= 0.2.2'))
     // 非 harness 包身份：name 校验兜底拒绝（防误读插件自身依赖副本）。
     writeFileSync(manifestPath, JSON.stringify({ name: '@evil/lookalike', version: '9.9.9' }))
     let identityError = ''

@@ -87,8 +87,9 @@ SDK/headless 等形态一律不支持——启动时 profile 门禁（`src/profi
   `docs/harness-defect-workarounds.md`；自更新通道（0.2.0 已退役）与陈旧代码
   检测（0.2.1 已拆）都**不要加回来**。
 - **依赖名单同线收敛**：peer 与 dev 的全部 `@deepseek-ai/dsh-*` 写同一个
-  `^<已实测的最低版本>`（当前 `^0.2.2-rc.1`，单点窗口
-  `[0.2.2-rc.1, 0.2.2-rc.1]`）——窗口内没有"下限/上限"之分，
+  `^<已实测的最低版本>`（当前 `^0.2.2-rc.1`，门禁窗口
+  `[0.2.2, 0.2.2]`，MIN/MAX 与运行时版本均只按 major.minor.patch 比较）
+  ——窗口内没有"下限/上限"之分，
   **不要用范围去"夹"多条 harness 线**（预发布线内跨版本 API 破坏频繁，范围
   放宽救不了；caret 在 `includePrerelease` 下实测**可放行新线、不承诺跨线**，
   但跨线迁移只能单点、必须同轮把 peer + dev 与 MIN/MAX 一并上移）。
@@ -104,10 +105,11 @@ SDK/headless 等形态一律不支持——启动时 profile 门禁（`src/profi
   `??` 回落探测——探测本身就是双窗口时代的产物，API 直呼目标版本的形态。
   若将来重新引入多线，才按历史手册 `docs/compat-guide-0.1.1-to-0.1.2.md` 的
   特征探测范式来。
-- **版本窗口**：`MAX_HARNESS_VERSION` 只写已验证 tag（追新验证通过后手动
-  上调）；`MIN_HARNESS_VERSION` 保持已实测的最低版本（当前
-  `[0.2.2-rc.1, 0.2.2-rc.1]` **单点窗口**——0.2.1 线 → 0.2.2 线跨 minor
-  迁移，MIN/MAX 同轮上移，取证见 `docs/compat-plan-0.2.2-rc.1.md`；
+- **版本窗口**：`MAX_HARNESS_VERSION` 只写已验证 tag 的 major.minor.patch
+  核心版本（追新验证通过后手动上调）；`MIN_HARNESS_VERSION` 保持已实测的
+  最低版本（当前 `[0.2.2, 0.2.2]` **单点窗口**，MIN/MAX 与运行时版本都只按
+  major.minor.patch 比较、忽略 `-rc.x` 等预发布后缀——0.2.1 线 → 0.2.2 线跨
+  minor 迁移，MIN/MAX 同轮上移，取证见 `docs/compat-plan-0.2.2-rc.1.md`；
   peer precheck 在 `includePrerelease` 下不承诺跨线，双窗口 OR 范围夹线被上条
   硬约定禁止，tuple 变化/跨线迁移时 MIN/MAX 一并上移）；
   MIN 上移 = 收缩承诺面：tuple 变化与跨 minor 迁移必做（caret 硬约束）；同
@@ -223,9 +225,10 @@ ProfileContext / argv[2] 桌面锚；唯一硬改动 = `@deepseek-ai/dsh-invaria
 猜测行为。
 
 **注意签出版本**：该仓库用 tag 标记发布。**本模板（及其派生插件）的兼容窗口是
-单点 `[0.2.2-rc.1, 0.2.2-rc.1]`（MIN = MAX = `0.2.2-rc.1`，0.2.1 线 → 0.2.2
-线跨 minor 迁移）**；typecheck / 编译锚点 = `dsh-v0.2.2-rc.1`，peer 与 dev
-写同一个 `^0.2.2-rc.1`，门禁在版本出窗口时软禁用。分析与实现一律以
+单点 `[0.2.2, 0.2.2]`（MIN = MAX = `0.2.2`，按 major.minor.patch 比较，
+已实测 `0.2.2-rc.1`；0.2.1 线 → 0.2.2 线跨 minor 迁移）**；typecheck /
+编译锚点 = `dsh-v0.2.2-rc.1`，peer 与 dev 写同一个 `^0.2.2-rc.1`，门禁在版本
+出窗口时软禁用。分析与实现一律以
 `git checkout dsh-v0.2.2-rc.1` 为准；本轮迁移记录见
 `docs/compat-plan-0.2.2-rc.1.md`。本机桌面版已内置 `0.2.2-rc.1` /
 node `24.21.0`；基座 cordis `^4.1.0` / schemastery `^3.19.0` /

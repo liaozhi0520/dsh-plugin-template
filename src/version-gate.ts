@@ -23,7 +23,7 @@
  * 等于 runtime），不满足的插件行在启动组装期直接 disabled，插件代码不会被
  * import。它守护的是「声明面」：本插件 peer 写 caret ^<MIN>（AGENTS.md 依赖
  * 约定），放行集宽于本窗口（数学上还放行更高的同 minor 线预发布/正式版）。
- * 本门禁守护「验证面」：MAX 只写已实测 tag。
+ * 本门禁守护「验证面」：MAX 只写已实测 tag 的 major.minor.patch 核心版本。
  *
  * 【0.2.2-rc.1 取证修正】旧文档写「caret 数学上不跨 minor 线」并不精确：
  * 实测 semver@7.8.5 下 `satisfies('0.2.2-rc.1', '^0.2.1-rc.1',
@@ -48,6 +48,12 @@
  * 实装版本可能高于 CLI 本体（实测 @deepseek-ai/dsh@0.1.5-rc.1 内嵌的
  * dsh-tools 已解析到 0.1.5-rc.2，读它会误判版本不匹配）。
  *
+ * 【版本比较口径】`MIN_HARNESS_VERSION` / `MAX_HARNESS_VERSION` 只允许
+ * `major.minor.patch` 三段格式；运行时读到的 harness 版本也只取
+ * `major.minor.patch` 参与比较——`-rc.1` 等预发布标识与 `+build` 构建元数据
+ * 一律忽略。即 `0.2.2-rc.1` 与 `0.2.2` 视为同一版本（0.2.2 线内任何
+ * 预发布/正式版都放行），跨 major.minor.patch 边界仍严格拦截。
+ *
  * 解析锚点（桌面单锚）：桌面版 host 子进程的 spawn 契约
  * （apps/desktop/src/host-process.ts:212-218；0.2.2-rc.1 复核 spawn 参数序
  * `entry, runtimeDir, …` 未变）把 runtimeDir 放在 process.argv[2]，runtime
@@ -61,25 +67,33 @@ import { join } from 'node:path'
 import { compareVersions } from './shared/version-compare.js'
 
 /**
+ * 支持窗口常量的格式约束：只允许 `major.minor.patch` 三段数字。
+ * 运行时另由 {@link assertCoreVersionConstant} 复核（类型只守护字面量）。
+ */
+export type CoreVersion = `${number}.${number}.${number}`
+
+/**
  * 支持窗口下限（含）：已安装 harness 版本 < 该值时拒绝加载。
  *
- * 窗口当前为 `[0.2.2-rc.1, 0.2.2-rc.1]`（**单点**）——0.2.1 线 → 0.2.2 线
- * 属跨 minor 线 / tuple 变化迁移，caret 不承诺跨线，按 AGENTS.md 硬约定
+ * 窗口当前为 `[0.2.2, 0.2.2]`（**单点**，major.minor.patch 口径）——0.2.1 线
+ * → 0.2.2 线属跨 minor 线 / tuple 变化迁移，caret 不承诺跨线，按 AGENTS.md 硬约定
  * MIN/MAX 必须同轮上移，peer + dev 的全部 @deepseek-ai/dsh-* 下限同步改写
  * 为 `^0.2.2-rc.1`。0.2.1 线（rc.1 ~ rc.5）自此**不再承诺**。
  *
- * MIN 语义 = 已实测的最低版本；本轮 MIN 上移到 0.2.2-rc.1 的依据：
+ * MIN 语义 = 已实测的最低版本（按 major.minor.patch 记录）；本轮 MIN 上移到
+ * 0.2.2（实测基线 0.2.2-rc.1）的依据：
  * - `c:/deepseek-harness` 签出 `dsh-v0.2.2-rc.1`（`66491b05`），逐 API 复核
  *   （官方 upgrade-guide rc.5→rc.1 新增 54 条、相关 8 条全判兼容）；
  * - 本机桌面版 `resources/runtime/primary-runtime/runtime.json` 的
  *   `desktopVersion` 已是 0.2.2-rc.1（node 24.21.0），具备真机验证条件；
  * - 取证与验证记录见 docs/compat-plan-0.2.2-rc.1.md。
  */
-export const MIN_HARNESS_VERSION = '0.2.2-rc.1'
+export const MIN_HARNESS_VERSION = '0.2.2' satisfies CoreVersion
 
 /**
  * 支持窗口上限（含）：已安装 harness 版本 > 该值时拒绝加载。
- * 只写已实测验证的 tag；追新验证通过后再上调。当前 = 0.2.2-rc.1。
+ * 只写已实测验证 tag 的 major.minor.patch 核心版本；追新验证通过后再上调。
+ * 当前 = 0.2.2（实测 tag 0.2.2-rc.1，同核心版本线均放行）。
  *
  * 0.2.1-rc.2 → 0.2.2-rc.1 区间 2642 commits / 8278 files，逐包复核结论：
  * plugin-compatibility / PLATFORM_MODULES / skill 零 diff；
@@ -88,12 +102,32 @@ export const MIN_HARNESS_VERSION = '0.2.2-rc.1'
  * webserver.register 签名未变；desktop argv[2] 锚未变。**无强制 API 适配**。
  * 唯一环境层改动 = `engines.node >=24.9.0`（官方指南 v0.2.1-rc.2/node-24）。
  *
- * 窗口内宿主（当前仅 rc.1）正常加载；高于 MAX 的宿主由本门禁软禁用并给出
- * 「降级桌面版 / 等待插件更新」指引——这正是保留本门禁（而非改用
- * engines.dsh）的核心价值。桌面版形态下 MAX 同时是「建议更新到的桌面版版本」
- * （应用与 runtime 锁步）。
+ * 窗口内宿主（当前 0.2.2 线，已实测 0.2.2-rc.1）正常加载；高于 MAX 的宿主由
+ * 本门禁软禁用并给出「降级桌面版 / 等待插件更新」指引——这正是保留本门禁
+ * （而非改用 engines.dsh）的核心价值。桌面版形态下 MAX 同时是「建议更新到的
+ * 桌面版版本」（应用与 runtime 锁步）。
  */
-export const MAX_HARNESS_VERSION = '0.2.2-rc.1'
+export const MAX_HARNESS_VERSION = '0.2.2' satisfies CoreVersion
+
+/**
+ * `major.minor.patch` 核心版本提取（MIN/MAX 的合法格式，也是比较口径）。
+ * 忽略 `-<prerelease>` 与 `+<build>` 后缀：`0.2.2-rc.1` → `0.2.2`。
+ * @throws 版本串不是三段数字开头时抛错（manifest version 由 npm 保证，正常不触发）。
+ */
+export function toCoreVersion(version: string): string {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version.trim())
+  if (match === null) {
+    throw new Error(`dsh-plugin-template: 无法从版本号 "${version}" 提取 major.minor.patch`)
+  }
+  return `${match[1]}.${match[2]}.${match[3]}`
+}
+
+/** 校验 MIN/MAX 常量的格式（在门禁调用期执行，避免模块求值期抛错破坏入口）。 */
+function assertCoreVersionConstant(name: string, value: string): void {
+  if (!/^\d+\.\d+\.\d+$/.test(value)) {
+    throw new Error(`dsh-plugin-template: ${name} 必须为 major.minor.patch 格式（当前为 "${value}"）`)
+  }
+}
 
 /** harness 版本解析结果：version + 命中的锚点描述（诊断用）。 */
 export interface HarnessVersionResolution {
@@ -145,32 +179,49 @@ export function resolveHarnessVersion(argv: readonly string[] = process.argv): H
   return { version: readHarnessManifest(manifestPath), anchor: `desktop:${manifestPath}` }
 }
 
-/** 读取正在运行的 harness（@deepseek-ai/dsh）版本（锚点见文件头注释）。 */
-export function installedHarnessVersion(): string {
-  return resolveHarnessVersion().version
+/**
+ * 读取正在运行的 harness（@deepseek-ai/dsh）版本（锚点见文件头注释）。
+ * 返回 manifest 原始版本（含可能的 `-rc.x` 后缀），比较时再由
+ * {@link toCoreVersion} 归一到 major.minor.patch。
+ * @param argv 可注入的 process.argv（冒烟测试用）。
+ */
+export function installedHarnessVersion(argv: readonly string[] = process.argv): string {
+  return resolveHarnessVersion(argv).version
 }
 
 /**
  * 严格 semver 比较（含预发布标识，忽略 build 元数据）——实现在
  * ./shared/version-compare.ts（纯函数、零依赖；client 停用面板也共享本模块，
- * 不能拉进 node:fs/node:path 依赖）。本模块窗口判定与 re-export 共用。
+ * 不能拉进 node:fs/node:path 依赖）。门禁在调用前已把两侧归一为
+ * major.minor.patch，因此比较实际只落在三段核心版本上；保留 re-export 供
+ * 需要完整 semver 语义的宿主侧调用方使用。
  */
 export { compareVersions }
 
-/** 版本门禁：已安装 harness 版本落在 [MIN, MAX] 窗口外时抛错（由调用方决定软禁用还是 fail-loud），否则直接返回。 */
-export function assertHarnessSupported(): void {
-  const installed = installedHarnessVersion()
-  if (compareVersions(installed, MIN_HARNESS_VERSION) < 0) {
+/**
+ * 版本门禁：已安装 harness 版本（仅取 major.minor.patch）落在 [MIN, MAX]
+ * 窗口外时抛错（由调用方决定软禁用还是 fail-loud），否则直接返回。
+ * @param argv 可注入的 process.argv（冒烟测试用）。
+ */
+export function assertHarnessSupported(argv: readonly string[] = process.argv): void {
+  assertCoreVersionConstant('MIN_HARNESS_VERSION', MIN_HARNESS_VERSION)
+  assertCoreVersionConstant('MAX_HARNESS_VERSION', MAX_HARNESS_VERSION)
+  const installed = installedHarnessVersion(argv)
+  const installedCore = toCoreVersion(installed)
+  const installedLabel = installed === installedCore
+    ? installed
+    : `${installed}（按 major.minor.patch 记为 ${installedCore}）`
+  if (compareVersions(installedCore, MIN_HARNESS_VERSION) < 0) {
     throw new Error(
       `dsh-plugin-template: 该插件要求 DeepSeek Harness >= ${MIN_HARNESS_VERSION}，`
-      + `当前桌面版内置的是 ${installed}。请将 DeepSeek 桌面版更新到 >= ${MIN_HARNESS_VERSION}，`
+      + `当前桌面版内置的是 ${installedLabel}。请将 DeepSeek 桌面版更新到 >= ${MIN_HARNESS_VERSION}，`
       + '或改用与旧版兼容的插件版本。',
     )
   }
-  if (compareVersions(installed, MAX_HARNESS_VERSION) > 0) {
+  if (compareVersions(installedCore, MAX_HARNESS_VERSION) > 0) {
     throw new Error(
       `dsh-plugin-template: 该插件仅支持 DeepSeek Harness <= ${MAX_HARNESS_VERSION}，`
-      + `当前桌面版内置的是 ${installed}。请将 DeepSeek 桌面版降级到 <= ${MAX_HARNESS_VERSION}，`
+      + `当前桌面版内置的是 ${installedLabel}。请将 DeepSeek 桌面版降级到 <= ${MAX_HARNESS_VERSION}，`
       + '或等待与该桌面版兼容的插件版本。',
     )
   }

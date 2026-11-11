@@ -19,7 +19,7 @@
 | `spec.ts` | 0.1.7 settings 模型：`SETTINGS_NS`、全字段 volatile 的 Config schema、`TemplateConfig`（Volatile 引用）、`TemplateSettingsHandle`（get 即时读 / replace 整段写） | 范式同构 |
 | `profile-gate.ts` | desktop-only 门禁（`profileContext.name === 'desktop'` 指纹，返回 profile.dir） | 范式同构 |
 | `soft-disable.ts` | 软禁用装配（两个门禁与重模块图加载失败共用出口）：错误日志 + no-op + `webserver/index-inject` 注入停用标记（载荷 `reason/min/max/installVersion/runtimeVersion?`，**不再带 plugin**） | 范式同构 |
-| `version-gate.ts` | 版本门禁：**单点窗口 `[0.2.2-rc.1, 0.2.2-rc.1]`** + 桌面单锚（argv[2]=runtimeDir 读 runtime 内 @deepseek-ai/dsh）+ compareVersions re-export | 范式同构 |
+| `version-gate.ts` | 版本门禁：**单点窗口 `[0.2.2, 0.2.2]`（MIN/MAX 与运行时版本均只按 major.minor.patch 比较）** + 桌面单锚（argv[2]=runtimeDir 读 runtime 内 @deepseek-ai/dsh）+ `toCoreVersion` / compareVersions re-export | 范式同构 |
 | `remote.ts` | Typert 端点：表驱动描述符（ping/getConfig/saveConfig）+ TemplateRemote 服务（第三方插件勿改回装饰器形态） | 范式同构 |
 
 > `invariant.ts`（官方 invariant 伴随件）已在 0.2.1 线迁移中删除；
@@ -97,7 +97,7 @@ pnpm build = gen-version.mjs → tsc -p tsconfig.build.json（lib/index.js + 跟
 0) 入口隔离 + exports 形状（inject 3 项无 pluginManager）×7 · 0b) 白名单 ×2 ·
 0c) key/banner ×2 · 0g) locale 元数据 ×14（每语言：title 同源 / description
 非空且带窗口 / detail 声明 / detail 路径形态 / detail 文件存在 / locale 存在）·
-6a) 桌面单锚 ×3 · 6f) 无更新状态机产物 ×4（update-state / registry-latest /
+6a) 桌面单锚 + 版本比较口径 ×7 · 6f) 无更新状态机产物 ×4（update-state / registry-latest /
 update-contract / package-info 的 lib 产物均不存在）· 7) 无更新提示契约 ×7
 （两 RPC 缺席 / 三业务端点在位 / main 无 startUpdateCheck / client 无更新面 /
 client 仍注册 config / host 产物零出网 / json-body 保留）。

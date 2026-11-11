@@ -52,6 +52,15 @@ const versionGateSource = readFileSync(new URL('../src/version-gate.ts', import.
 const min = extractQuotedConstant(versionGateSource, 'MIN_HARNESS_VERSION')
 const max = extractQuotedConstant(versionGateSource, 'MAX_HARNESS_VERSION')
 
+// 窗口常量只允许 major.minor.patch（与 version-gate.ts 的比较口径一致）：
+// 写成 -rc.x / 两段式会让卡片窗口文案与门禁语义脱节，直接在 build 期拒绝。
+for (const [name, value] of [['MIN_HARNESS_VERSION', min], ['MAX_HARNESS_VERSION', max]]) {
+  if (!/^\d+\.\d+\.\d+$/.test(value)) {
+    console.error(`[gen-version] ${name} 必须为 major.minor.patch 格式（当前为 "${value}"）`)
+    process.exit(1)
+  }
+}
+
 const localesSource = readFileSync(new URL('../src/client/locales.ts', import.meta.url), 'utf8')
 // 卡片 title 取单一来源：zh/en 词典的 title 必须同值（模板既有纪律，smoke 0g 同源守护）。
 const titles = [...localesSource.matchAll(/(?:^|\n)\s*title: '([^']+)'/g)].map(match => match[1])

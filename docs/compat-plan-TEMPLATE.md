@@ -9,7 +9,8 @@
 > **窗口前提（默认单点，跨线迁移只钉一个已实测 tag）**：本模板与其派生插件的
 > 窗口是 `[MIN_HARNESS_VERSION, MAX_HARNESS_VERSION]`，peer/dev 写同一个
 > `^<已实测的最低版本>`，门禁用双边界比较，代码里**不留版本探测分支**。
-> **0.2.2-rc.1 起为单点窗口 `[0.2.2-rc.1, 0.2.2-rc.1]`（MIN = MAX）**：跨
+> **窗口为单点 `[0.2.2, 0.2.2]`（MIN = MAX；MIN/MAX 与运行时
+> 版本均只按 major.minor.patch 比较，预发布后缀忽略）**：跨
 > minor 线迁移时 MIN/MAX 同轮上移；同 tuple 内追新（如 0.2.2-rc.1 → rc.2）
 > caret 已覆盖，**只抬 MAX、不动依赖**；**tuple 变化**（0.2.1→0.2.2）或跨
 > minor 线才需要手改依赖并重跑破坏面取证。如确需多线支持，参考
@@ -24,7 +25,7 @@
 
 | 项 | 状态 |
 |---|---|
-| `src/version-gate.ts` | MIN = ? / MAX = ?（窗口两端；实测通过后才抬 MAX） |
+| `src/version-gate.ts` | MIN = ? / MAX = ?（窗口两端，均为 major.minor.patch；实测通过后才抬 MAX） |
 | `c:/deepseek-harness` | 签出 tag：？（先 `git describe --tags` 核对） |
 | `package.json` | peer 与 dev 是否同值 `^<目标版本>`？删了什么、增了什么？ |
 | node_modules | 全部 `@deepseek-ai/dsh-*` 实装 ?；死包已移除？ |
@@ -89,8 +90,8 @@
 
 ## 3. 版本窗口决策
 
-MIN = ?（保持已实测的最低版本）；MAX = ?（**已实测验证**的 tag；冒烟通过前不得抬）。
-窗口当前为单点 `[0.2.2-rc.1, 0.2.2-rc.1]`（MIN = MAX）；需要支持同 tuple 新版本
+MIN = ?（保持已实测的最低版本）；MAX = ?（**已实测验证**的 tag，写其 major.minor.patch；冒烟通过前不得抬）。
+窗口当前为单点 `[0.2.2, 0.2.2]`（MIN = MAX；运行时版本只取 major.minor.patch 比较）；需要支持同 tuple 新版本
 时只上调 MAX——同 tuple 内的新 rc（如 0.2.2-rc.1 → rc.2）caret 已覆盖，**不动
 依赖**；tuple 变化（如 0.2.1→0.2.2）或跨 minor 线才需 MIN/MAX 同轮上移、手改
 依赖并重跑破坏面取证。不要随意加宽到未实测的 tag（跨版本 API 破坏频繁，范围

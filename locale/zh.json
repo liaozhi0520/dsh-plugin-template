@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "DSH Plugin Template",
-    "description": "DeepSeek Harness 插件模板：host + client 双半、插件页配置页、版本门禁与停用面板骨架（兼容 DeepSeek Harness 0.2.2-rc.1 ~ 0.2.2-rc.1）。",
+    "description": "DeepSeek Harness 插件模板：host + client 双半、插件页配置页、版本门禁与停用面板骨架（兼容 DeepSeek Harness 0.2.2 ~ 0.2.2）。",
     "detail": "assets/detail/zh.md"
   }
 }

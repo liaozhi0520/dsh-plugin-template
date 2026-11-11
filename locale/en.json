@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "DSH Plugin Template",
-    "description": "DeepSeek Harness plugin template: host + client halves, Plugins-page config, version gate and disabled panel (compatible with DeepSeek Harness 0.2.2-rc.1 ~ 0.2.2-rc.1).",
+    "description": "DeepSeek Harness plugin template: host + client halves, Plugins-page config, version gate and disabled panel (compatible with DeepSeek Harness 0.2.2 ~ 0.2.2).",
     "detail": "assets/detail/en.md"
   }
 }
