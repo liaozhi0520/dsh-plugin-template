@@ -8,8 +8,8 @@
  * 软禁用与 client 停用面板将没有机会运行。因此本文件刻意保持无业务，静态
  * import 图只允许包含不会被 harness API 漂移破坏的最小集合：
  * - ./version-gate.ts（node:fs/node:path + ./shared/version-compare 纯函数）、
- *   ./profile-gate.ts（type-only cordis）、./soft-disable.ts（→ ./shared 纯数据/
- *   同构纯函数；0.2.2 起不再回显插件版本，./package-info.ts 无调用方已删）；
+ *   ./profile-gate.ts（type-only cordis）、./soft-disable.ts / ./plugin-status.ts
+ *   （→ ./shared 纯数据/同构纯函数；状态经只读路由暴露，不再写页面全局）；
  * - ./spec.ts（运行时仅 @deepseek-ai/schemastery）：不可约——`Config` 必须
  *   从入口值导出（Loader 只认领 apply 所在入口的 Config 导出，0.1.7 迁移
  *   踩坑），且 schema 求值本就发生在 Loader 侧、先于 apply，不新增风险面；
@@ -26,6 +26,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { assertDesktopProfileLaunched } from './profile-gate.js'
+import { registerPluginStatus } from './plugin-status.js'
 import type { TemplateConfig } from './spec.js'
 import { softDisable } from './soft-disable.js'
 import { assertHarnessSupported } from './version-gate.js'
@@ -45,6 +46,10 @@ export { Config } from './spec.js'
 export const inject = ['tools', 'typert', 'settings']
 
 export async function apply(ctx: Context, config: TemplateConfig): Promise<void> {
+  // 状态报告器必须最先建立：门禁失败时 client 仍可通过只读状态路由读取原因，
+  // 且它独立于 ./main.ts 重模块图（后者加载失败也要能出停用面板）。
+  const status = registerPluginStatus(ctx)
+
   // 本插件自带自定义配置页（client 半 plugins.bundle.config 槽位，挂在「插件」
   // 页的组合包详情页上），退出自动配置页——否则设置里会出现自动生成的本插件
   // 表单。官方所有带自定义 UI 的插件同款（configure 返回 disposer，挂本
@@ -60,7 +65,7 @@ export async function apply(ctx: Context, config: TemplateConfig): Promise<void>
     profile = assertDesktopProfileLaunched(ctx)
   } catch (error) {
     if (process.env.DSH_PLUGIN_TEMPLATE_STRICT) throw error
-    softDisable(ctx, error instanceof Error ? error.message : String(error))
+    softDisable(status, error instanceof Error ? error.message : String(error))
     return
   }
 
@@ -71,7 +76,7 @@ export async function apply(ctx: Context, config: TemplateConfig): Promise<void>
     assertHarnessSupported()
   } catch (error) {
     if (process.env.DSH_PLUGIN_TEMPLATE_STRICT) throw error
-    softDisable(ctx, error instanceof Error ? error.message : String(error))
+    softDisable(status, error instanceof Error ? error.message : String(error))
     return
   }
 
@@ -87,7 +92,7 @@ export async function apply(ctx: Context, config: TemplateConfig): Promise<void>
     if (process.env.DSH_PLUGIN_TEMPLATE_STRICT) throw error
     console.error('[dsh-plugin-template] 宿主端模块加载失败详情:', error)
     softDisable(
-      ctx,
+      status,
       'dsh-plugin-template: 宿主端模块加载失败——可能与当前 DeepSeek Harness 的 API 面不兼容'
       + `（${error instanceof Error ? error.message : String(error)}）。`
       + '请升级/降级插件或 harness 至匹配版本；若为安装损坏请重装插件。',

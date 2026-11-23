@@ -210,21 +210,29 @@ verdaccio 6.10 实测（test-version-bump 三连坑的最终形态）：
    每个插件实际加载的路径——「配置里写的路径」与「插件实际用的路径」对不上时一眼
    现形（实测 `using htpasswd file: <绝对路径>` 直接暴露嵌套目录问题）。
 
-## 15. 软禁用标记是页面级 global：插件升级后旧标记会残留
+## 15. 软禁用状态不要走页面级 global（0.2.3 起改为只读状态路由）
 
-`softDisable()` 走 `webserver/index-inject` 的 `{kind:'global'}` 行，把
-`window.__DSH_PLUGIN_TEMPLATE_DISABLED__` 写进 **index.html 首次渲染**。插件页
-升级（0.2.2 的 `updateBundle`：卸载旧版 → 安装新版）只热替换 host/client 模块，
-**不会重建文档**——旧版 host 在页面加载时写入的 global 仍留在 `window` 上。若不
-校验来源，新版本 client 加载后仍会读到旧标记并挂出停用面板，表现为「新版本已
-支持当前 harness，却一直显示 soft-disable panel」，直到整页刷新/重启才消失。
+旧实现把软禁用原因通过 `webserver/index-inject` 的 `{kind:'global'}` 行写进
+**index.html 首次渲染**的 `window.__DSH_PLUGIN_TEMPLATE_DISABLED__`。插件页升级
+只热替换 host/client 模块，**不会重建文档**，旧版 host 写入的 global 会留在
+`window` 上；client 若直接信任它，新版本已支持当前 harness 仍会显示停用面板。
+上一轮用 `pluginVersion` 版本戳 + `template/ping` 探活只是补丁，不改变“页面状态
+与 host 状态不同步”的根因。
 
-修法：标记载荷带 `pluginVersion`（host 半在模块求值期从 package.json 取快照，避免
-旧 host 读磁盘新版本谎报），client bundle 构建期烧入自己的 `PLUGIN_VERSION`
-（`tsdown.config.ts` define → `src/client/build-info.ts`），只有两者严格相等才认
-标记；不一致时先用 `template/ping` 探活当前 host：能通 = 新 host 已加载，忽略并
-`delete` 该 global；不通 = host 仍是旧模块（`link:` 本地构建不经插件页安装时），
-保留停用面板并提示重启。smoke 0c 的版本戳断言与 `isDisabledFlagCurrent` 单测
-守护该行为。注意：`link:`
-本地链接 + 手工 build 不经过插件页安装操作时，host 半旧模块仍会运行（见
-`docs/harness-defect-workarounds.md` §② 残留限制），这不是本标记问题，仍须重启。
+现行方案（0.2.3-alpha.2）：
+
+- host 在 `index.ts` 的 `apply()` 最早注册只读状态路由
+  `GET /dsh-plugin-template/status`，返回 `{state:'active'}` 或
+  `{state:'disabled',reason,min,max,installVersion,runtimeVersion?}`；
+  路由随插件 fiber 生命周期撤销，插件升级/重新启用后由新 host 重新注册。
+- `soft-disable.ts` 只负责日志 + `PluginStatusReporter.disable(reason)`，不再写
+  任何页面 global。
+- client 每次加载 `fetchPluginStatus()`；只有读到 `disabled` 才挂停用面板；
+  接口不可得（旧 host、启动竞态、网络错误）按正常配置页处理，绝不读取 legacy
+  标记。
+
+关于 `link:` 本地构建：最新 DSH 的 HMR `reconcileProfile()` 会比较 profile
+目录及**已链接包目标**的模块文件；`setPluginEnabled()` / `setBundleEnabled()`
+等 Plugin Manager 操作会触发重新组合并替换已变化的 host。因此构建后在插件页
+关闭再启用该插件即可拿到新 host，不需要重启；只有“只 build、不触发任何
+Plugin Manager 操作”的纯手工开发路径才会保留旧 host，此时重启或重新启用即可。

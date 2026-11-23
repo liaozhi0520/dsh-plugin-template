@@ -76,7 +76,7 @@
 
 ## 2. 模板现状与差距
 
-**已有（不重做）**：`src/version-gate.ts`（MIN/MAX 窗口 + 软禁用 + `DSH_PLUGIN_TEMPLATE_STRICT` 逃逸）、软禁用注入 `disabled-flag` + client 停用面板（`TemplateDisabledSection`）、README「依赖版本与追新」。（原 `scripts/bump-deps.mjs` 追新脚本已删除，见 A2 决策。）
+**已有（不重做）**：`src/version-gate.ts`（MIN/MAX 窗口 + 软禁用 + `DSH_PLUGIN_TEMPLATE_STRICT` 逃逸）、`plugin-status` 只读状态路由 + client 停用面板（`TemplateDisabledSection`）、README「依赖版本与追新」。（原 `scripts/bump-deps.mjs` 追新脚本已删除，见 A2 决策。）
 
 **差距**：
 
@@ -175,7 +175,7 @@ export type TemplateUpdateApplyResult =
   | { ok: false; error: { code: string; message?: string } }
 ```
 
-（与 `disabled-flag.ts` 同级同风格：纯数据/类型/常量，两端共用。）
+（与 `src/shared/` 下其他纯数据/类型/常量文件同级同风格：两端共用，禁 Node 依赖。）
 
 ### B3 host 接线：`src/remote.ts`
 

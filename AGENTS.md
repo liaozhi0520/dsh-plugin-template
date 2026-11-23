@@ -39,9 +39,10 @@ SDK/headless 等形态一律不支持——启动时 profile 门禁（`src/profi
   typecheck` / `pnpm run smoke-offline`（离线全量守护，零费用）/
   `pnpm run test-version-bump`（Verdaccio 版本更新测试台：验证插件页
   Versions 区的更新流程，需桌面壳人工确认）。
-- **改任何代码（host/client）后必须重启 DeepSeek Harness 才生效**（本插件
-  不接热加载——桌面热更不可用；`link:` 本地链接 + 手工 build 不经过插件页
-  操作时，host 半仍持进程内旧模块，开发期一律「改码必重启」）。
+- **改任何代码（host/client）后的刷新路径**：`pnpm build` 后在插件页把该插件
+  关闭再启用——`setPluginEnabled`/`setBundleEnabled` 触发的 HMR `reconcileProfile()`
+  会驱逐已变化的 `link:` 目标 host 模块并启动新代码；只 build 而不触发插件页/CLI
+  操作、或插件不在 Plugin Manager 管理时，进程内仍是旧 host，必须重启 DeepSeek Harness。
 
 ## 结构与构建（模块清单见 `docs/module-map.md`）
 

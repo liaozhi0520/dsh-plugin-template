@@ -2,9 +2,10 @@
  * 离线冒烟（零费用、零真机，node scripts/smoke-offline.mjs）：
  * 0)  入口隔离（两段式入口回归护栏）+ exports 形状 + lib/main.js 产出；
  * 0b) 入口图白名单（静态遍历 lib/index.js 的相对 import 图，逐文件过审）；
- * 0c) 客户端配置页 key 守护：lib/client.js 的 plugins.bundle.config 注册 key
- *     与模块加载器 banner 的 bundle id 都必须逐字等于 package.json 的 name
- *     （写错 = 「插件」页配置区静默不出现，keyed 槽位不匹配无报错）；
+ * 0c) 客户端配置页 key 守护 + 软禁用状态路由契约：lib/client.js 的
+ *     plugins.bundle.config 注册 key 与模块加载器 banner 的 bundle id 都必须
+ *     逐字等于 package.json 的 name；lib/plugin-status.js 的状态路由返回
+ *     active/disabled 载荷；
  * 0d) 【已退役，编号留空】原「陈旧代码防护构建面守护」——0.2.1 起 StaleBanner +
  *     BUILD_VERSION 整体拆除（上游已修：卸载重装不重启由 harness 自行驱逐旧
  *     模块，2026-10-19 真机确认），不要再加回来；
@@ -22,8 +23,9 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { register } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertHarnessSupported, ownPluginVersion, resolveHarnessVersion, toCoreVersion } from '../lib/version-gate.js'
-import { isDisabledFlagCurrent } from '../lib/shared/disabled-flag.js'
+import { assertHarnessSupported, resolveHarnessVersion, toCoreVersion } from '../lib/version-gate.js'
+import { registerPluginStatus } from '../lib/plugin-status.js'
+import { PLUGIN_STATUS_PATH, parsePluginStatus } from '../lib/shared/plugin-status.js'
 
 let failed = 0
 function check(label, ok) {
@@ -69,7 +71,7 @@ try {
 // 0b) 入口图白名单：薄门禁入口的「最小依赖面」不只是「无 dsh-*」，而是**逐文件
 //     过审**——图内每个模块与每个裸依赖都必须在白名单里，往入口图加任何 import
 //     都会显式破冒烟。（运行时拦截见上面钩子；本节是结构守护，两者互补。）
-//     【0.2.2 起】soft-disable 不再回显插件版本，package-info.js 退出入口图。
+//     【0.2.3-alpha.2 起】状态由 plugin-status.ts 的只读路由提供，不再写页面 global。
 // ---------------------------------------------------------------------------
 {
   const { fileURLToPath } = await import('node:url')
@@ -80,9 +82,10 @@ try {
     'index.js',
     'spec.js', // Config 导出（schemastery 不可约，见 src/index.ts 头注释）
     'profile-gate.js',
+    'plugin-status.js',
     'soft-disable.js',
     'version-gate.js',
-    'shared/disabled-flag.js',
+    'shared/plugin-status.js',
     'shared/version-compare.js',
   ])
   // 允许的裸依赖（node: 内建不受限）。
@@ -135,22 +138,70 @@ try {
     `client config page: plugins.bundle.config key = ${manifest.name}（BUNDLE_KEY 常量，容忍 rolldown 改名）`,
     new RegExp(`const\\s+BUNDLE_KEY[\\w$]*\\s*=\\s*"${manifest.name}"`).test(clientSource),
   )
-  // 插件页升级会热替换 client bundle，但不会重建 index.html：页面里旧 host 写入的
-  // 软禁用标记必须带版本戳，client 才能识别并忽略旧页面残留。构建期常量缺失 =
-  // 升级后仍显示停用面板（真机踩坑）。
   check(
-    `client config page: 软禁用标记版本戳已烧入（${manifest.version}）`,
-    new RegExp(`const\\s+PLUGIN_VERSION[\\w$]*\\s*=\\s*"${manifest.version}"`).test(clientSource),
+    `client config page: 状态路由路径已内联（${PLUGIN_STATUS_PATH}）`,
+    new RegExp(`const\\s+PLUGIN_STATUS_PATH[\\w$]*\\s*=\\s*"${PLUGIN_STATUS_PATH.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`).test(clientSource),
+  )
+  check('client config page: 不再包含 legacy DISABLED_GLOBAL', !clientSource.includes('__DSH_PLUGIN_TEMPLATE_DISABLED__'))
+  check(
+    'plugin status: parsePluginStatus 接受 active，拒绝非法载荷',
+    parsePluginStatus({ state: 'active' })?.state === 'active'
+      && parsePluginStatus({ state: 'disabled', reason: 'r', min: '0.2.2', max: '0.2.2', installVersion: '0.2.2' })?.state === 'disabled'
+      && parsePluginStatus({ state: 'disabled', reason: 'r' }) === undefined
+      && parsePluginStatus({ state: 'other' }) === undefined,
   )
   check(
-    'disabled flag: 同版本标记有效、旧版本/无版本标记失效',
-    isDisabledFlagCurrent({ reason: '', min: '', max: '', installVersion: '', pluginVersion: manifest.version }, manifest.version)
-      && !isDisabledFlagCurrent({ reason: '', min: '', max: '', installVersion: '' }, manifest.version)
-      && !isDisabledFlagCurrent({ reason: '', min: '', max: '', installVersion: '', pluginVersion: '0.0.0-old' }, manifest.version),
+    'legacy cleanup: lib/shared/disabled-flag.js 不存在',
+    !existsSync(new URL('../lib/shared/disabled-flag.js', import.meta.url)),
   )
+}
+
+// ---------------------------------------------------------------------------
+// 0c-2) 状态路由契约：用 fake ctx / fake webServer 验证 route 注册与载荷。
+// ---------------------------------------------------------------------------
+{
+  const routes = []
+  const fakeCtx = {
+    inject(_deps, callback) {
+      callback({
+        effect(factory) { factory(); return () => {} },
+        webServer: {
+          register(route) { routes.push(route); return () => {} },
+        },
+      })
+    },
+  }
+  const reporter = registerPluginStatus(fakeCtx)
+  const route = routes[0]
   check(
-    `version gate: ownPluginVersion() = package.json version（${manifest.version}）`,
-    ownPluginVersion() === manifest.version,
+    `plugin status: route = exact ${PLUGIN_STATUS_PATH}`,
+    route !== undefined && route.kind === 'exact' && route.path === PLUGIN_STATUS_PATH,
+  )
+  const readRoute = () => {
+    let body = ''
+    const res = {
+      statusCode: 0,
+      headers: {},
+      setHeader(name, value) { this.headers[name] = value },
+      end(value) { body += value ?? '' },
+    }
+    route.handler({ method: 'GET' }, res)
+    return { status: res.statusCode, headers: res.headers, body: JSON.parse(body) }
+  }
+  const active = readRoute()
+  reporter.disable('smoke reason')
+  const disabled = readRoute()
+  check(
+    'plugin status: active → disabled 载荷切换正确',
+    active.status === 200
+      && active.body.state === 'active'
+      && active.headers['cache-control'] === 'no-store'
+      && disabled.status === 200
+      && disabled.body.state === 'disabled'
+      && disabled.body.reason === 'smoke reason'
+      && disabled.body.min === '0.2.2'
+      && disabled.body.max === '0.2.2'
+      && disabled.body.installVersion === '0.2.2',
   )
 }
 
@@ -331,7 +382,7 @@ try {
     !/checkUpdate|getUpdateState|updateSelf|shell\.overlay/u.test(clientSource),
   )
   check(
-    'no update notices: lib/client.js 仍注册 plugins.bundle.config（正常 + 停用两路）',
+    'no update notices: lib/client.js 仍注册 plugins.bundle.config（状态路由决定正常/停用）',
     clientSource.includes('plugins.bundle.config'),
   )
 
@@ -340,11 +391,12 @@ try {
   const hostArtifacts = [
     'lib/index.js',
     'lib/main.js',
+    'lib/plugin-status.js',
     'lib/remote.js',
     'lib/soft-disable.js',
     'lib/version-gate.js',
     'lib/shared/contract.js',
-    'lib/shared/disabled-flag.js',
+    'lib/shared/plugin-status.js',
     'lib/shared/version-compare.js',
   ]
   const outbound = hostArtifacts.filter((rel) => {

@@ -60,10 +60,7 @@ dsh plugin --profile desktop add <本模板目录的绝对路径>
 > CLI **启动** desktop profile——上面的 add（管理 profile 内容）不受影响，跑起来
 > 一律用桌面壳。
 
-**开发循环（无热更）**：改任何代码（host/client）→ `pnpm build` → **重启
-DeepSeek Harness** 生效。为什么不接热加载：桌面热更不可用，且 `link:` 本地
-链接 + 手工 build 不经过插件页操作时，host 半仍持进程内旧模块（harness 的
-模块驱逐只在经插件页/CLI 的安装操作时发生）——开发期一律「改码必重启」。
+**开发循环（热更边界）**：改任何代码（host/client）→ `pnpm build` → 在插件页把该插件关闭再启用（`setPluginEnabled`/`setBundleEnabled` 会触发 HMR `reconcileProfile()`，驱逐已变化的 `link:` 目标模块并启动新 host）；如果只 build 而完全不触发插件页/CLI 的安装或启用操作，进程内仍是旧 host，需要一次重新启用或重启 DeepSeek Harness。
 
 验证路径：桌面版「插件」页 → 卡片（icon + 标题 + 描述）→ 详情区
 （`assets/detail/<lang>.md`）→ 组合包详情页配置页
@@ -157,10 +154,10 @@ harness 处于 0.x rc 快速迭代期，要点：
   比较，`0.2.2-rc.1` 视为 `0.2.2`），窗口外软禁用。版本源 = 桌面 runtime
   内的 `@deepseek-ai/dsh` 包 version（**桌面单锚**：host 子进程 argv[2] =
   runtimeDir，读其 node_modules；不读 dsh-tools 等内嵌依赖——caret 实装版本
-  可能高于本体）。软禁用 = 醒目日志 + 插件 no-op + client 停用说明面板
-  （载荷含支持窗口/当前 harness 版本；**不再**回显插件 `currentVersion`、
-  **不再**比较 registry latest）；`DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错
-  fail-loud。与 harness 内建 peer 预检的分工：预检守「声明面」（caret 放行集
+  可能高于本体）。软禁用 = 醒目日志 + 插件 no-op + client 通过 host 的只读状态路由
+  （`GET /dsh-plugin-template/status`）读取停用原因/支持窗口/当前 harness 版本；
+  client 不再读取页面 global，状态路由随 host fiber 生命周期撤销/重建；
+  `DSH_PLUGIN_TEMPLATE_STRICT=1` 恢复抛错 fail-loud。与 harness 内建 peer 预检的分工：预检守「声明面」（caret 放行集
   宽于窗口），门禁守「验证面」（MAX 只写已实测 tag）——两者并存、缺一不可。
   **行为地图**：低于 MIN 的宿主由 harness 声明面在组合期拦截（静默跳过、插件
   无机会出面板）；窗口内正常加载；**高于 MAX 由本插件门禁软禁用并给出可执行的
@@ -220,9 +217,11 @@ gate、停用说明面板、`plugins.bundle.config` 槽位、`greet` 工具与
   `check-version-sync.mjs`、`.githooks/pre-commit`）已删除——它兜底的 harness
   缺陷已被上游修复。**不要再加回来**；取证与回退记录见
   `docs/harness-defect-workarounds.md`。
-- 软禁用态没有 RPC 可轮询；停用说明面板承担版本修复指引（窗口/当前 runtime
-  版本/桌面版更新引导），但**不再**回显插件 `currentVersion`、不再
-  比较 registry latest。
+- 软禁用态的业务 RPC 全部不可用；host 只保留只读状态路由
+  `GET /dsh-plugin-template/status`，client 据此渲染停用说明面板（窗口/当前
+  runtime 版本/桌面版更新引导），**不再**回显插件 `currentVersion`、不再
+  比较 registry latest。页面级 `DISABLED_GLOBAL` 已随 0.2.3 状态路由重构删除，
+  不再提供 legacy 标记兜底。
 
 ## 发布到 npm
 
@@ -305,15 +304,17 @@ dsh plugin --profile desktop add github:<owner>/dsh-plugin-template#<commit-sha>
 ├── src/main.ts                       # host 半业务主体（门禁全过后动态拉起：greet + 端点）
 ├── src/spec.ts                       # 0.1.7 settings 模型（volatile Config + SETTINGS_NS + 句柄）
 ├── src/profile-gate.ts               # desktop-only profile 门禁（profileContext 指纹）
+├── src/plugin-status.ts              # 软禁用状态报告器 + 只读状态路由（active/disabled）
 ├── src/soft-disable.ts               # 软禁用装配（两门禁 + 重模块图加载失败共用出口）
 ├── src/version-gate.ts               # 版本门禁（单点 [0.2.2, 0.2.2]、major.minor.patch 比较 + 桌面单锚 argv[2]）
 ├── src/remote.ts                     # Typert 端点（表驱动描述符 + TemplateRemote 服务）
 ├── src/css-modules.d.ts              # CSS Modules 导入声明
 ├── src/shared/contract.ts            # 业务 RPC 契约（ping/getConfig/saveConfig）
-├── src/shared/disabled-flag.ts       # 软禁用标记契约（载荷含 reason/min/max/installVersion/runtimeVersion）
+├── src/shared/plugin-status.ts       # 软禁用状态契约（PLUGIN_STATUS_PATH + parsePluginStatus）
 ├── src/shared/version-compare.ts     # 严格 semver 比较（纯函数，双端共用）
 ├── src/shared/json-body.ts           # 响应体健壮读取（缺陷① 防御工具，当前无调用方）
-├── src/client/index.ts               # client 半入口（plugins.bundle.config 正常/停用两路）
+├── src/client/index.ts               # client 半入口（状态路由决定正常/停用）
+├── src/client/status.ts              # client 状态查询（超时 + JSON 校验）
 ├── src/client/locales.ts             # zh/en 词典（title = 卡片显示名，zh/en 同值）
 ├── src/client/api.ts                 # 浏览器 → host RPC（OpResult 统一错误面）
 ├── src/client/bundle-key.ts          # plugins.bundle.config 注册 key（= 包名，单源）

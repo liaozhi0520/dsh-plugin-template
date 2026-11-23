@@ -29,15 +29,10 @@ interface RpcEnvelope {
 }
 
 /** 调用 host 半 template/* 端点，统一把通道错误折叠进 OpResult。 */
-async function callTemplate<T>(
-  rpc: ClientConnectionRpc,
-  endpoint: string,
-  args: Record<string, unknown> = {},
-  signal?: AbortSignal,
-): Promise<OpResult<T>> {
+async function callTemplate<T>(rpc: ClientConnectionRpc, endpoint: string, args: Record<string, unknown> = {}): Promise<OpResult<T>> {
   let envelope: RpcEnvelope
   try {
-    envelope = (await rpc.call('/api', endpoint, { args }, signal)) as RpcEnvelope
+    envelope = (await rpc.call('/api', endpoint, { args })) as RpcEnvelope
   } catch (error) {
     return { ok: false, kind: 'network', detail: error instanceof Error ? error.message : String(error) }
   }
@@ -60,8 +55,8 @@ export interface PingValue {
 }
 
 /** 调用 host 半 template/ping（回显文本 + host 时间戳）。 */
-export async function pingHost(rpc: ClientConnectionRpc, text: string, signal?: AbortSignal): Promise<OpResult<PingValue>> {
-  const result = await callTemplate<{ pong?: unknown; at?: unknown }>(rpc, TEMPLATE_ENDPOINT.ping, { request: { text } }, signal)
+export async function pingHost(rpc: ClientConnectionRpc, text: string): Promise<OpResult<PingValue>> {
+  const result = await callTemplate<{ pong?: unknown; at?: unknown }>(rpc, TEMPLATE_ENDPOINT.ping, { request: { text } })
   if (!result.ok) return result
   const body = result.value
   if (body === null || typeof body !== 'object' || typeof body.pong !== 'string' || typeof body.at !== 'number') {

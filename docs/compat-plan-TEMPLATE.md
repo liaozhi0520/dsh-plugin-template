@@ -108,8 +108,9 @@ MIN = ?（保持已实测的最低版本）；MAX = ?（**已实测验证**的 t
 
 ## 6. 迁移后需实测的运行时点
 
-1. 软禁用链路：临时压低 `MAX_HARNESS_VERSION` 触发一次，确认
-   「已停用」面板照常渲染、index-inject 无残留，再改回；
+1. 软禁用链路：临时压低 `MAX_HARNESS_VERSION` 触发一次，确认只读状态路由
+   `GET /dsh-plugin-template/status` 返回 `state: disabled`、「已停用」面板照常
+   渲染、无页面级 `DISABLED_GLOBAL` 残留，再改回；
 2. 装载链路：`dsh plugin add` → profile 装载一次通过（新线新增的安装机制走一遍）；
 3. 端到端：设置面板 + 全部业务工具/端点（本插件不接热加载：改码/改版本后必须重启 harness）；
 4. 旧会话/旧数据：若目标版本升级了 Session 格式（如 V3），验证旧会话打开、

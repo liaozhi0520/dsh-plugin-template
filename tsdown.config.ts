@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, resolve as resolvePath } from 'node:path'
 import { defineConfig } from 'tsdown'
@@ -18,8 +17,6 @@ import { transform } from 'lightningcss'
  * 类名映射。虚拟 id 不能以 .css 结尾（tsdown 的 css-guard 按后缀拦截）。
  */
 const PLUGIN_ID = '@scoped/dsh-plugin-template'
-/** 构建期烧入 client bundle 的插件版本（仅用于识别旧页面残留的软禁用标记）。 */
-const PLUGIN_VERSION = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version
 const CSS_MODULE_SUFFIX = '.module.css'
 const CSS_VIRTUAL_PREFIX = '\0dsh-plugin-template-css-module:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
@@ -91,8 +88,6 @@ export default defineConfig({
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
-    // src/client/build-info.ts：client 半据此丢弃旧页面残留的软禁用标记。
-    __DSH_PLUGIN_TEMPLATE_VERSION__: JSON.stringify(PLUGIN_VERSION),
   },
   outputOptions: {
     entryFileNames: 'client.js',

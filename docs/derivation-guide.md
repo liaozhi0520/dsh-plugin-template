@@ -10,7 +10,10 @@
 > 原「34 文件差异」口径待下一次衍生 E2E 复测确认（估算 29）。
 > **【0.2.2 起方案 A】更新提醒链路再删 8 个文件、新增 `assets/detail/` /
 > `scripts/templates/detail.*.md` / `pnpm-workspace.yaml` 三个落点，文件差异计数
-> 再次变化——§2 的「约 29 个文件」口径需下一次衍生 E2E 复测后回填，勿直接沿用。**
+> 再次变化——§2 的「约 29 个文件」口径需下一次衍生 E2E 复测后回填，勿直接沿用。
+> **【0.2.3 soft-disable 重构】新增 `src/plugin-status.ts` / `src/shared/plugin-status.ts` /
+> `src/client/status.ts`，删除 `src/shared/disabled-flag.ts` / `src/client/build-info.ts`；
+> 文件差异计数按下一次衍生 E2E 复测回填。**
 
 ## 0. 任务简报模板（派工时给 agent 的输入）
 
@@ -55,7 +58,7 @@
 |---|---|---|
 | **短插件 id** | `dsh-plugin-template` | = 仓库名（克隆后即根目录名）；cordis 插件名、cordis.patch 条目 id、settings ns、Typert package 都从它派生 |
 | **npm 包名** | `@scoped/dsh-plugin-template` | `@<npm用户名>/<短id>`（`npm whoami` 取 scope） |
-| **环境前缀** | `DSH_PLUGIN_TEMPLATE` | 短 id 全大写、`-`/`.` → `_`；派生 STRICT 环境变量与 DISABLED_GLOBAL 标记名 |
+| **环境前缀** | `DSH_PLUGIN_TEMPLATE` | 短 id 全大写、`-`/`.` → `_`；派生 STRICT 环境变量 |
 
 三条链各自独立、互不包含：短 id ≠ 包名（包名多 scope 前缀）≠ 前缀（大写）。改完整套后，三件套在代码里的每一处落点见 §2。
 
@@ -83,18 +86,17 @@
 | `src/main.ts` 的 Typert `package:` 字段 | `<短id>` |
 | `src/spec.ts` 的 `SETTINGS_NS`（= settings.replace 的 ns，profile 组合条目 id） | `<短id>` |
 | `src/client/index.ts` 的 `export const name` + effect label（`: dictionaries`） | `<短id>` |
+| `src/shared/plugin-status.ts` 的 `PLUGIN_STATUS_PATH = '/dsh-plugin-template/status'` | `/<短id>/status`（host 路由与 client 查询同源） |
 | `tsdown.config.ts` 的 CSS 虚拟模块前缀（`\0dsh-plugin-template-css-module:`）与插件名（`dsh-plugin-template-css-modules-inline`） | `<短id>` |
 | ~~shell.overlay 条目 id（`template-update-notice`）~~ | **【0.2.2 起随更新提醒退役（方案 A）】模板已无 shell.overlay 注册**；若派生插件确需该槽位，自行按 `<语义前缀>-notice` 命名、在 client/index.ts 注册，并保留 `dsh-client-ui-layout` peer |
 | 日志/错误前缀 `[dsh-plugin-template]` / `dsh-plugin-template: `：main.ts、soft-disable.ts、profile-gate.ts、client/index.ts、TemplateDisabledSection.tsx、根 index.ts；version-gate.ts 4 条错误文案前缀 | `<短id>` |
 | README / AGENTS / docs / 各文件头注释里的旧短 id | 全量替换 |
 
-### 表③ 环境前缀 —— 2 处 + 文档
+### 表③ 环境前缀 —— 1 处 + 文档
 
 | 位置 | 改成 |
 |---|---|
 | `src/index.ts` 的 `DSH_<前缀>_STRICT`（×3 处使用 + 注释）、`src/version-gate.ts` STRICT 注释 | `DSH_<新前缀>_STRICT` |
-| `src/shared/disabled-flag.ts` 的 `DISABLED_GLOBAL = '__DSH_<前缀>_DISABLED__'` | `__DSH_<新前缀>_DISABLED__` |
-| `src/client/build-info.ts` 的 `__DSH_<前缀>_VERSION__` 与 `tsdown.config.ts` 的同名 define key | `__DSH_<新前缀>_VERSION__`（软禁用标记版本戳，两处必须同字面） |
 | README / docs 里的前缀表述 | 同步 |
 
 ### 表④ 顺手项
@@ -146,7 +148,7 @@
 |---|---|
 | `pnpm typecheck` | 语法/类型损坏（实测曾当场拦下批量替换事故造成的 4 文件字符级损坏）；locale ns 漏改（PropsLocale 参数不匹配） |
 | `pnpm build` | gen-version 的 title 提取失败（locales.ts zh/en title 不同值 → 显式报错）；tsc 编译错误 |
-| `pnpm run smoke-offline`（46 项） | 入口隔离与入口图白名单（往薄 shim 加 import）；**BUNDLE_KEY/banner id ≠ 包名**（0c）；**cordis.patch.yml id ↔ 构建产物 entry name** 交叉校验（rename 节）；locale 元数据 title 同源 / description 携带窗口 / **meta.detail 声明且文件存在**（0g）；桌面单锚语义（6a）；**无更新状态机产物**（6f）；**无更新提示契约 + 产物零出网 + json-body 保留**（7） |
+| `pnpm run smoke-offline`（49 项） | 入口隔离与入口图白名单（往薄 shim 加 import）；**BUNDLE_KEY/banner id ≠ 包名**（0c）；**cordis.patch.yml id ↔ 构建产物 entry name** 交叉校验（rename 节）；locale 元数据 title 同源 / description 携带窗口 / **meta.detail 声明且文件存在**（0g）；桌面单锚语义（6a）；**无更新状态机产物**（6f）；**无更新提示契约 + 产物零出网 + json-body 保留**（7） |
 | `git grep` 残留核对 | **分两类**：身份引用（RPC 端点串 `<旧服务>/`、`SETTINGS_NS`、locale ns、overlay id、旧 scope、旧前缀）必须零残留；描述性提及可保留（BASE_DESCRIPTION、README「从模板衍生」说明、docs 存档） |
 
 ## 5. 实测坑清单（衍生 E2E 观察到的，按危险度排序）
@@ -175,7 +177,7 @@
 
 ## 6. 完成定义（DoD）
 
-- [ ] 三连全绿：`pnpm typecheck` / `pnpm build` / `pnpm run smoke-offline`（46 项 ALL PASSED）
+- [ ] 三连全绿：`pnpm typecheck` / `pnpm build` / `pnpm run smoke-offline`（49 项 ALL PASSED）
 - [ ] `git grep` 分类核对：身份引用零残留（§4 第 5 行的两类清单）
 - [ ] `icon.svg` 未改动（用户未明确要求换图时；§5 坑 11）
 - [ ] `git init` + 初始 commit（0.2.1 起无提交期闸门）

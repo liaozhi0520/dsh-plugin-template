@@ -1,9 +1,9 @@
 /**
- * 版本不兼容时的说明面板（plugins.bundle.config 条目，挂「插件」页本组合包
+ * @file 版本不兼容时的说明面板（plugins.bundle.config 条目，挂「插件」页本组合包
  * 详情页）：host 半门禁软禁用后，业务能力全部不可用，本面板代替正常配置页
- * 向用户说明原因与处置。原因文本与推荐安装版本由 host 半经 index 注入的
- * 全局标记带来（../shared/disabled-flag.ts），经 inject props 传入，不在
- * 浏览器侧重复版本判断。
+ * 向用户说明原因与处置。原因文本与推荐安装版本由 host 半的只读状态路由带来
+ * （../shared/plugin-status.ts），client 每次加载查询当前 host，不在浏览器侧
+ * 重复版本判断，也不读取页面全局标记。
  *
  * 版式：原因 → 支持窗口 → 当前 harness 版本 → 桌面版更新指引
  * （desktop-only：桌面版应用与内置 harness 锁步同版，处置 = 更新/降级
