@@ -9,6 +9,12 @@
 > D2 = **采用 `meta.detail`** / D3 = **单点窗口** / D4 = **一步到位** /
 > D5 = **本轮不 bump 版本**。§5.2 方案 B 仅存档。
 >
+> **【历史记录说明，2026-11-23 追记】** 本文写于 0.2.2-rc.1 时期；文中
+> 「改码 / 改 `dsh.client` 必重启 harness」的结论仅适用于当时链路。
+> 0.2.3-alpha.2 起 HMR `reconcileProfile()` 会在插件关闭/重新启用时驱逐已变化的
+> `link:` host 模块并失效包清单缓存，改码后只需重新启用插件；仅 build 不触发
+> Plugin Manager 操作时才需重启。现行开发循环见 `AGENTS.md` / `README.md`。
+>
 > **目标版本判定依据**（若意图是别的版本，请先确认再执行）：
 > ① 本机桌面版 `resources/runtime/primary-runtime/runtime.json` 的
 > `desktopVersion` 已是 `0.2.2-rc.1`（node 24.21.0）；② `c:/deepseek-harness`

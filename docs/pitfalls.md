@@ -69,11 +69,14 @@ bundle，clsx 同款）；确需 client+host 双端共用同一份运行时依�
 tsdown `deps.alwaysBundle` 显式打进 client（范式 three 的踩坑记录）。反过来，
 `@deepseek-ai/*` 一律进 peerDependencies，永不进 dependencies。
 
-## 7. dsh.client 声明是包元数据，扫描缓存永不过期
+## 7. dsh.client 声明改后需重新启用插件（0.2.3 起无需重启 harness）
 
-`package.json` 的 `dsh.bundle` / `dsh.client`（含 `inject` 列表）在 harness
-侧有扫描缓存，**改它必须重启 harness** 才生效；`lib/` 内容变化才会走产物
-替换。inject 列表必须与 peer/neverBundle 同步维护（0.2.1 包集）。
+`package.json` 的 `dsh.bundle` / `dsh.client`（含 `inject` 列表）由 host 在每次
+client registry flush 时重新读取；`pnpm build` 后在插件页把插件关闭再启用
+（`setPluginEnabled`/`setBundleEnabled` 触发 HMR `reconcileProfile()`，失效
+包清单缓存并重建 host）即可生效。只有只 build、不触发 Plugin Manager 操作、
+或插件不在 Plugin Manager 管理时，才需要重启 DeepSeek Harness。
+inject 列表仍必须与 peer/neverBundle 同步维护（0.2.1 包集）。
 
 ### 7b. 别追 dsh-* 声明文件里的跨包 `import type`（`skipLibCheck` 是上游前提）
 

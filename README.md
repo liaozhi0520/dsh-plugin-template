@@ -60,7 +60,7 @@ dsh plugin --profile desktop add <本模板目录的绝对路径>
 > CLI **启动** desktop profile——上面的 add（管理 profile 内容）不受影响，跑起来
 > 一律用桌面壳。
 
-**开发循环（热更边界）**：改任何代码（host/client）→ `pnpm build` → 在插件页把该插件关闭再启用（`setPluginEnabled`/`setBundleEnabled` 会触发 HMR `reconcileProfile()`，驱逐已变化的 `link:` 目标模块并启动新 host）；如果只 build 而完全不触发插件页/CLI 的安装或启用操作，进程内仍是旧 host，需要一次重新启用或重启 DeepSeek Harness。
+**开发循环（热更边界）**：改任何代码（host/client）→ `pnpm build` → 在插件页把该插件关闭再启用（`setPluginEnabled`/`setBundleEnabled` 会触发 HMR `reconcileProfile()`，驱逐已变化的 `link:` 目标模块并启动新 host）；如果只 build 而完全不触发插件页/CLI 的安装或启用操作，进程内仍是旧 host，需要一次重新启用；插件不在 Plugin Manager 管理时，才需要重启 DeepSeek Harness。
 
 验证路径：桌面版「插件」页 → 卡片（icon + 标题 + 描述）→ 详情区
 （`assets/detail/<lang>.md`）→ 组合包详情页配置页

@@ -112,7 +112,7 @@ MIN = ?（保持已实测的最低版本）；MAX = ?（**已实测验证**的 t
    `GET /dsh-plugin-template/status` 返回 `state: disabled`、「已停用」面板照常
    渲染、无页面级 `DISABLED_GLOBAL` 残留，再改回；
 2. 装载链路：`dsh plugin add` → profile 装载一次通过（新线新增的安装机制走一遍）；
-3. 端到端：设置面板 + 全部业务工具/端点（本插件不接热加载：改码/改版本后必须重启 harness）；
+3. 端到端：设置面板 + 全部业务工具/端点（改码/改版本后先 `pnpm build`，再在插件页关闭并重新启用插件；HMR `reconcileProfile()` 会替换 host。只有只 build、不触发 Plugin Manager 操作时才需重启 harness）；
 4. 旧会话/旧数据：若目标版本升级了 Session 格式（如 V3），验证旧会话打开、
    迁移后本插件的读取路径仍工作。
 

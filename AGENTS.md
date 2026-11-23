@@ -42,7 +42,7 @@ SDK/headless 等形态一律不支持——启动时 profile 门禁（`src/profi
 - **改任何代码（host/client）后的刷新路径**：`pnpm build` 后在插件页把该插件
   关闭再启用——`setPluginEnabled`/`setBundleEnabled` 触发的 HMR `reconcileProfile()`
   会驱逐已变化的 `link:` 目标 host 模块并启动新代码；只 build 而不触发插件页/CLI
-  操作、或插件不在 Plugin Manager 管理时，进程内仍是旧 host，必须重启 DeepSeek Harness。
+  操作时，进程内仍是旧 host，需要一次重新启用；插件不在 Plugin Manager 管理时，才需要重启 DeepSeek Harness。
 
 ## 结构与构建（模块清单见 `docs/module-map.md`）
 
@@ -200,7 +200,7 @@ ProfileContext / argv[2] 桌面锚；唯一硬改动 = `@deepseek-ai/dsh-invaria
 6. client 与 host 共用的依赖**不能进 `dependencies`**（tsdown 外部化 + client
    模块表没有它 = **client 半整体死亡**）——客户端要用的依赖进 devDependencies
    让 tsdown 打进 bundle（clsx 同款），确需双端共用的再评估 alwaysBundle。
-7. `dsh.client` 声明是包元数据，扫描缓存永不过期：改它要重启 harness。
+7. `dsh.client` 声明是包元数据；0.2.3-alpha.2 起改它后重新启用插件即可（HMR `reconcileProfile()` 会失效包清单缓存并重建 host），只有只 build、不触发 Plugin Manager 操作时才需要重启 harness。
 8. **别追 dsh-\* 声明文件里的跨包 `import type`**：`skipLibCheck` 跳过 `.d.ts`
    内部检查，上游把这些包放在自己的 devDependencies（peer 只有 cordis）——
    补 devDep 只会把缺失推给更下游，**不要关 `skipLibCheck`**；唯一退化是
