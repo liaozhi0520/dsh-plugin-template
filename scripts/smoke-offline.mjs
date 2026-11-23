@@ -22,7 +22,8 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { register } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertHarnessSupported, resolveHarnessVersion, toCoreVersion } from '../lib/version-gate.js'
+import { assertHarnessSupported, ownPluginVersion, resolveHarnessVersion, toCoreVersion } from '../lib/version-gate.js'
+import { isDisabledFlagCurrent } from '../lib/shared/disabled-flag.js'
 
 let failed = 0
 function check(label, ok) {
@@ -133,6 +134,23 @@ try {
   check(
     `client config page: plugins.bundle.config key = ${manifest.name}（BUNDLE_KEY 常量，容忍 rolldown 改名）`,
     new RegExp(`const\\s+BUNDLE_KEY[\\w$]*\\s*=\\s*"${manifest.name}"`).test(clientSource),
+  )
+  // 插件页升级会热替换 client bundle，但不会重建 index.html：页面里旧 host 写入的
+  // 软禁用标记必须带版本戳，client 才能识别并忽略旧页面残留。构建期常量缺失 =
+  // 升级后仍显示停用面板（真机踩坑）。
+  check(
+    `client config page: 软禁用标记版本戳已烧入（${manifest.version}）`,
+    new RegExp(`const\\s+PLUGIN_VERSION[\\w$]*\\s*=\\s*"${manifest.version}"`).test(clientSource),
+  )
+  check(
+    'disabled flag: 同版本标记有效、旧版本/无版本标记失效',
+    isDisabledFlagCurrent({ reason: '', min: '', max: '', installVersion: '', pluginVersion: manifest.version }, manifest.version)
+      && !isDisabledFlagCurrent({ reason: '', min: '', max: '', installVersion: '' }, manifest.version)
+      && !isDisabledFlagCurrent({ reason: '', min: '', max: '', installVersion: '', pluginVersion: '0.0.0-old' }, manifest.version),
+  )
+  check(
+    `version gate: ownPluginVersion() = package.json version（${manifest.version}）`,
+    ownPluginVersion() === manifest.version,
   )
 }
 

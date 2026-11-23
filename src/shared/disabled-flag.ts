@@ -22,6 +22,17 @@ export const DISABLED_GLOBAL = '__DSH_PLUGIN_TEMPLATE_DISABLED__'
 /** 标记载荷：host 半给出的停用原因（含 harness 版本指引）与支持窗口。 */
 export interface DisabledFlag {
   reason: string
+  /**
+   * 产生本标记的 host 半插件版本（package.json version）。
+   *
+   * 页面级 `globalThis` 标记只在 index.html 首次渲染时写入；插件热更新会替换
+   * host/client 模块，但不会重建文档，旧标记会继续留在 `window` 上。client
+   * 半只认「插件版本与自己构建版本一致」的标记，否则视为旧页面残留并忽略，
+   * 避免新版本已支持当前 harness 却仍显示停用面板。
+   *
+   * 旧版（本字段引入前）产出的标记没有该字段 → 一律视为残留。
+   */
+  pluginVersion?: string
   /** 支持窗口下限（含），与 version-gate.ts 的 MIN_HARNESS_VERSION 一致（major.minor.patch）。 */
   min: string
   /** 支持窗口上限（含），与 version-gate.ts 的 MAX_HARNESS_VERSION 一致（major.minor.patch）。 */
@@ -37,4 +48,15 @@ export interface DisabledFlag {
    * client 面板不渲染该行。
    */
   runtimeVersion?: string
+}
+
+/**
+ * 判断页面里的软禁用标记是否由当前这个插件构建产出。
+ *
+ * 只做版本相等判断（不做 semver 比较）：标记生产者与当前 client 来自同一次
+ * 发布才可信；旧页面残留的标记（旧版本或没有 `pluginVersion` 的旧格式）一律
+ * 失效。纯函数，client bundle 会内联本文件，禁止引入 Node 依赖。
+ */
+export function isDisabledFlagCurrent(flag: DisabledFlag, pluginVersion: string): boolean {
+  return typeof flag.pluginVersion === 'string' && flag.pluginVersion === pluginVersion
 }

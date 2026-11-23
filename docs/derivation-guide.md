@@ -94,6 +94,7 @@
 |---|---|
 | `src/index.ts` 的 `DSH_<前缀>_STRICT`（×3 处使用 + 注释）、`src/version-gate.ts` STRICT 注释 | `DSH_<新前缀>_STRICT` |
 | `src/shared/disabled-flag.ts` 的 `DISABLED_GLOBAL = '__DSH_<前缀>_DISABLED__'` | `__DSH_<新前缀>_DISABLED__` |
+| `src/client/build-info.ts` 的 `__DSH_<前缀>_VERSION__` 与 `tsdown.config.ts` 的同名 define key | `__DSH_<新前缀>_VERSION__`（软禁用标记版本戳，两处必须同字面） |
 | README / docs 里的前缀表述 | 同步 |
 
 ### 表④ 顺手项
@@ -145,7 +146,7 @@
 |---|---|
 | `pnpm typecheck` | 语法/类型损坏（实测曾当场拦下批量替换事故造成的 4 文件字符级损坏）；locale ns 漏改（PropsLocale 参数不匹配） |
 | `pnpm build` | gen-version 的 title 提取失败（locales.ts zh/en title 不同值 → 显式报错）；tsc 编译错误 |
-| `pnpm run smoke-offline`（39 项） | 入口隔离与入口图白名单（往薄 shim 加 import）；**BUNDLE_KEY/banner id ≠ 包名**（0c）；**cordis.patch.yml id ↔ 构建产物 entry name** 交叉校验（rename 节）；locale 元数据 title 同源 / description 携带窗口 / **meta.detail 声明且文件存在**（0g）；桌面单锚语义（6a）；**无更新状态机产物**（6f）；**无更新提示契约 + 产物零出网 + json-body 保留**（7） |
+| `pnpm run smoke-offline`（46 项） | 入口隔离与入口图白名单（往薄 shim 加 import）；**BUNDLE_KEY/banner id ≠ 包名**（0c）；**cordis.patch.yml id ↔ 构建产物 entry name** 交叉校验（rename 节）；locale 元数据 title 同源 / description 携带窗口 / **meta.detail 声明且文件存在**（0g）；桌面单锚语义（6a）；**无更新状态机产物**（6f）；**无更新提示契约 + 产物零出网 + json-body 保留**（7） |
 | `git grep` 残留核对 | **分两类**：身份引用（RPC 端点串 `<旧服务>/`、`SETTINGS_NS`、locale ns、overlay id、旧 scope、旧前缀）必须零残留；描述性提及可保留（BASE_DESCRIPTION、README「从模板衍生」说明、docs 存档） |
 
 ## 5. 实测坑清单（衍生 E2E 观察到的，按危险度排序）
@@ -174,7 +175,7 @@
 
 ## 6. 完成定义（DoD）
 
-- [ ] 三连全绿：`pnpm typecheck` / `pnpm build` / `pnpm run smoke-offline`（39 项 ALL PASSED）
+- [ ] 三连全绿：`pnpm typecheck` / `pnpm build` / `pnpm run smoke-offline`（46 项 ALL PASSED）
 - [ ] `git grep` 分类核对：身份引用零残留（§4 第 5 行的两类清单）
 - [ ] `icon.svg` 未改动（用户未明确要求换图时；§5 坑 11）
 - [ ] `git init` + 初始 commit（0.2.1 起无提交期闸门）

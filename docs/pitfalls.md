@@ -209,3 +209,22 @@ verdaccio 6.10 实测（test-version-bump 三连坑的最终形态）：
 3. 诊断手法沉淀：verdaccio 自己打印的每行加载日志（现在经管道落盘，见 §13）会写明
    每个插件实际加载的路径——「配置里写的路径」与「插件实际用的路径」对不上时一眼
    现形（实测 `using htpasswd file: <绝对路径>` 直接暴露嵌套目录问题）。
+
+## 15. 软禁用标记是页面级 global：插件升级后旧标记会残留
+
+`softDisable()` 走 `webserver/index-inject` 的 `{kind:'global'}` 行，把
+`window.__DSH_PLUGIN_TEMPLATE_DISABLED__` 写进 **index.html 首次渲染**。插件页
+升级（0.2.2 的 `updateBundle`：卸载旧版 → 安装新版）只热替换 host/client 模块，
+**不会重建文档**——旧版 host 在页面加载时写入的 global 仍留在 `window` 上。若不
+校验来源，新版本 client 加载后仍会读到旧标记并挂出停用面板，表现为「新版本已
+支持当前 harness，却一直显示 soft-disable panel」，直到整页刷新/重启才消失。
+
+修法：标记载荷带 `pluginVersion`（host 半在模块求值期从 package.json 取快照，避免
+旧 host 读磁盘新版本谎报），client bundle 构建期烧入自己的 `PLUGIN_VERSION`
+（`tsdown.config.ts` define → `src/client/build-info.ts`），只有两者严格相等才认
+标记；不一致时先用 `template/ping` 探活当前 host：能通 = 新 host 已加载，忽略并
+`delete` 该 global；不通 = host 仍是旧模块（`link:` 本地构建不经插件页安装时），
+保留停用面板并提示重启。smoke 0c 的版本戳断言与 `isDisabledFlagCurrent` 单测
+守护该行为。注意：`link:`
+本地链接 + 手工 build 不经过插件页安装操作时，host 半旧模块仍会运行（见
+`docs/harness-defect-workarounds.md` §② 残留限制），这不是本标记问题，仍须重启。

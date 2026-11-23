@@ -23,7 +23,8 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { TEMPLATE_NS, en, zh, type TemplatePanelKey } from './locales'
 import { BUNDLE_KEY as bundleKey } from './bundle-key'
-import { DISABLED_GLOBAL, type DisabledFlag } from '../shared/disabled-flag'
+import { PLUGIN_VERSION } from './build-info'
+import { DISABLED_GLOBAL, isDisabledFlagCurrent, type DisabledFlag } from '../shared/disabled-flag'
 import { getConfigViaHost, pingHost, saveConfigViaHost } from './api'
 import { TemplateSection, type TemplateSectionInjected } from './TemplateSection'
 import { TemplateDisabledSection, type TemplateDisabledSectionInjected } from './TemplateDisabledSection'
@@ -44,36 +45,77 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-export function apply(ctx: ClientContext): void {
-  console.log('[dsh-plugin-template] client half loaded (plugins page config)')
+/** 挂「已停用」说明面板（停用分支的唯一渲染路径）。 */
+function registerDisabledPanel(ctx: ClientContext, flag: DisabledFlag): void {
+  const reason = typeof flag.reason === 'string' ? flag.reason : ''
+  const min = typeof flag.min === 'string' ? flag.min : ''
+  const max = typeof flag.max === 'string' ? flag.max : ''
+  const installVersion = typeof flag.installVersion === 'string' ? flag.installVersion : ''
+  // 当前 harness 版本（host 半尽力解析；缺席 = 锚点全失败 → 面板不渲染该行）。
+  const runtimeVersion = typeof flag.runtimeVersion === 'string' ? flag.runtimeVersion : null
+  console.warn('[dsh-plugin-template] host half disabled:', reason)
+  ctx.slots.inject('plugins.bundle.config', () =>
+    ctx.slots.register(
+      {
+        name: 'plugins.bundle.config',
+        key: BUNDLE_KEY,
+        locale: TEMPLATE_NS,
+        inject: (): TemplateDisabledSectionInjected => ({ reason, min, max, installVersion, runtimeVersion }),
+      },
+      TemplateDisabledSection,
+    ),
+  )
+}
+
+export async function apply(ctx: ClientContext): Promise<void> {
+  console.log(`[dsh-plugin-template] client half loaded (plugins page config, v${PLUGIN_VERSION})`)
 
   // 注册本插件的双语词典（zh/en 键集一致，注册即完成校验）；
   // ctx.effect 让词典随插件停用自动撤下。
   ctx.effect(() => ctx.locale.register(TEMPLATE_NS, { zh, en }), 'dsh-plugin-template: dictionaries')
 
   // host 半门禁软禁用时注入的全局标记（shared/disabled-flag.ts）：
-  // 存在 → 只挂"已停用"说明面板，不注册任何业务能力；不存在 → 正常加载。
+  // 存在且属于当前插件构建 → 只挂"已停用"说明面板，不注册任何业务能力；不存在 → 正常加载。
+  //
+  // 【必须校验 pluginVersion】`webserver/index-inject` 的 global 行只在 index.html
+  // 首次渲染时写入页面；插件页升级会热替换 host/client 模块，但**不会重建文档**，
+  // 旧版 host 留下的 `window[DISABLED_GLOBAL]` 会一直存在。若直接信任它，新版本
+  // 明明已支持当前 harness，新的 client 仍会挂出停用面板（真机踩坑）。版本不一致
+  // = 旧页面残留，先用 `template/ping` 探活当前 host 业务半：
+  // - 新 host 已在跑 → ping 成功，删掉旧标记按正常路径注册；
+  // - host 仍是旧模块（link: 本地构建不经过插件页安装时）→ ping 失败，保留面板
+  //   并提示重启（不要把「旧 host + 新 client」伪装成正常配置页）。
   const disabledFlag = (window as unknown as Record<string, unknown>)[DISABLED_GLOBAL] as DisabledFlag | undefined
   if (disabledFlag !== undefined) {
-    const reason = typeof disabledFlag.reason === 'string' ? disabledFlag.reason : ''
-    const min = typeof disabledFlag.min === 'string' ? disabledFlag.min : ''
-    const max = typeof disabledFlag.max === 'string' ? disabledFlag.max : ''
-    const installVersion = typeof disabledFlag.installVersion === 'string' ? disabledFlag.installVersion : ''
-    // 当前 harness 版本（host 半尽力解析；缺席 = 锚点全失败 → 面板不渲染该行）。
-    const runtimeVersion = typeof disabledFlag.runtimeVersion === 'string' ? disabledFlag.runtimeVersion : null
-    console.warn('[dsh-plugin-template] host half disabled:', reason)
-    ctx.slots.inject('plugins.bundle.config', () =>
-      ctx.slots.register(
-        {
-          name: 'plugins.bundle.config',
-          key: BUNDLE_KEY,
-          locale: TEMPLATE_NS,
-          inject: (): TemplateDisabledSectionInjected => ({ reason, min, max, installVersion, runtimeVersion }),
-        },
-        TemplateDisabledSection,
-      ),
+    if (isDisabledFlagCurrent(disabledFlag, PLUGIN_VERSION)) {
+      registerDisabledPanel(ctx, disabledFlag)
+      return
+    }
+    const connection = ctx.get('connection') as ConnectionHandle
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 1500)
+    let hostAlive = false
+    try {
+      hostAlive = (await pingHost(connection.rpc, 'soft-disable-probe', controller.signal)).ok
+    } catch {
+      hostAlive = false
+    } finally {
+      clearTimeout(timer)
+    }
+    if (!hostAlive) {
+      console.warn(
+        '[dsh-plugin-template] 页面里仍是旧版本停用标记，且当前 host 的 template/ping 不可用'
+        + '（host 可能仍是旧模块）——按停用处理；若刚更新过插件，请重启 DeepSeek Harness。',
+      )
+      registerDisabledPanel(ctx, disabledFlag)
+      return
+    }
+    console.warn(
+      '[dsh-plugin-template] 忽略旧页面残留的停用标记：标记版本 '
+      + `${typeof disabledFlag.pluginVersion === 'string' ? disabledFlag.pluginVersion : '(none)'}`
+      + `，当前 client 版本 ${PLUGIN_VERSION}（host template/ping 探活成功）。`,
     )
-    return
+    delete (window as unknown as Record<string, unknown>)[DISABLED_GLOBAL]
   }
 
   // 通用 RPC 通道（连接层提供）：浏览器 → host 的 template/* 代理。

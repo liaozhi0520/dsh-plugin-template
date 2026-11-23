@@ -31,7 +31,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only：'webserver/index-inject' 事件 + IndexInjection 行类型（软禁用标记注入）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { DISABLED_GLOBAL, type DisabledFlag } from './shared/disabled-flag.js'
-import { MAX_HARNESS_VERSION, MIN_HARNESS_VERSION, resolveHarnessVersion } from './version-gate.js'
+import { MAX_HARNESS_VERSION, MIN_HARNESS_VERSION, ownPluginVersion, resolveHarnessVersion } from './version-gate.js'
 
 /** 软禁用：醒目错误日志 + 插件整体 no-op + client 半停用面板标记（两个门禁与重模块图加载失败共用）。 */
 export function softDisable(ctx: Context, reason: string): void {
@@ -51,6 +51,7 @@ export function softDisable(ctx: Context, reason: string): void {
       name: DISABLED_GLOBAL,
       value: {
         reason,
+        pluginVersion: ownPluginVersion(),
         min: MIN_HARNESS_VERSION,
         max: MAX_HARNESS_VERSION,
         installVersion: MAX_HARNESS_VERSION,

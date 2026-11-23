@@ -129,6 +129,34 @@ function assertCoreVersionConstant(name: string, value: string): void {
   }
 }
 
+/**
+ * 读取本插件包自身版本（package.json version）。
+ *
+ * 只用于给页面级软禁用标记打「生产者版本」戳——client 半据此丢弃插件热更新
+ * 后旧页面残留的标记（见 shared/disabled-flag.ts 的 `pluginVersion`）。不参与
+ * harness 门禁比较；失败时返回 `'unknown'`，client 端会把它当成不可信标记。
+ *
+ * **必须在模块求值期取快照，不能在 `webserver/index-inject` 回调里现读磁盘**：
+ * `link:` 本地链接 + 手工 build 不重启时，进程内仍是旧模块，但磁盘上的
+ * package.json 可能已被 bump 成新版本——现读会把旧 host 谎报成新版本，让 client
+ * 的版本戳校验失效（这与 0.2.1 拆除的 package-info 陈旧检测踩的是同一个坑）。
+ */
+const OWN_PLUGIN_VERSION = readOwnPluginVersion()
+
+function readOwnPluginVersion(): string {
+  try {
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: unknown }
+    return typeof manifest.version === 'string' && manifest.version !== '' ? manifest.version : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** 当前进程内 host 模块求值时看到的插件版本快照（见 {@link OWN_PLUGIN_VERSION}）。 */
+export function ownPluginVersion(): string {
+  return OWN_PLUGIN_VERSION
+}
+
 /** harness 版本解析结果：version + 命中的锚点描述（诊断用）。 */
 export interface HarnessVersionResolution {
   version: string
